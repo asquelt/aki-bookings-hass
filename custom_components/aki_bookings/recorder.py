@@ -72,6 +72,7 @@ class RecordingManager:
         self.enabled_at: float | None = None
         self.unassigned_on: str | None = None
         self.last_error: str | None = None
+        self._refused = False  # the last report was refused for good (4xx), not merely lost
         self._wide_at: datetime | None = None
         self._lock = asyncio.Lock()
         self._unsubs: list[CALLBACK_TYPE] = []
@@ -202,6 +203,12 @@ class RecordingManager:
     def _local_date(dt: datetime):
         return dt_util.as_local(dt).date()
 
+    @staticmethod
+    def _touched_after_start(b) -> bool:
+        """A cancelled booking changed after its start: the session had most likely begun before the cancellation."""
+        changed = dt_util.parse_datetime(b.updated_at) if b.updated_at else None
+        return bool(changed and changed.tzinfo and changed > b.start)
+
     async def _refresh_register(self, now: datetime, force: bool = False) -> bool:
         """Read a week of sessions: the opt-in can change after the session, long after the booking
         left the short feed the door codes use. Only id, ref, times and the choice are kept."""
@@ -217,10 +224,9 @@ class RecordingManager:
         for b in bookings:
             seen.add(b.id)
             entry = self.register.get(b.id)
-            if not b.confirmed:
-                if entry and entry["state"] in (rec.ST_WAITING, rec.ST_LEFT):
-                    entry["state"] = rec.ST_DONE  # cancelled: nobody was let in
-                continue
+            if not b.confirmed and not (entry or rec.takes_of(self.journal, b.id) or self._touched_after_start(b)):
+                continue  # cancelled before its start: nobody was let in, and the API answers 404 for it
+            # A booking cancelled after its session began is handled like any other: the footage exists.
             if b.end > now or (self.enabled_at and b.end.timestamp() < self.enabled_at):
                 continue
             if entry is None:
@@ -317,6 +323,8 @@ class RecordingManager:
                 if mine or already_sent:
                     if e["state"] != rec.ST_UPLOADING:
                         if not await self._report(e, "uploading"):  # this locks the client's choice
+                            if self._refused:
+                                e["inspected_on"] = today  # asking again today gives the same answer
                             continue
                         e["state"], e["stalled"] = rec.ST_UPLOADING, 0
                         e["sent_before"] = sum(1 for f in e.get("files") or [] if f["state"] == rec.F_SENT)
@@ -335,6 +343,8 @@ class RecordingManager:
                     if await self._report(e, "uploading") and await self._report(e, "empty"):
                         e["state"] = rec.ST_DONE
                         self._fire(EVENT_REC_EMPTY, e, had_takes=had_takes)
+                    elif self._refused:
+                        e["inspected_on"] = today
                     continue
                 else:
                     continue
@@ -433,12 +443,18 @@ class RecordingManager:
     # ---- finishing ----------------------------------------------------------------------------
 
     async def _report(self, e: dict, status: str, **extra: Any) -> bool:
+        self._refused = False
         try:
             await self.coordinator.api.report_recording(e["id"], status, **extra)
         except ApiError as err:
             self.last_error = f"report {status} for {e['ref']}: {err}"
+            self._refused = not err.transient  # the same request would be refused again
             if err.status == 404:
-                e["state"] = rec.ST_DONE  # cancelled meanwhile: the booking system wants no more reports
+                e["state"] = rec.ST_DONE  # cancelled before its start: the booking system wants no reports
+            elif err.code == "recording_delivered":
+                e["state"], e["remote"], e["phase"] = rec.ST_DONE, "ready", None  # a link is out; it is never replaced by a lesser status
+            elif err.code == "recording_not_opted_in":
+                e["opt_in"] = False  # consent withdrawn since the last feed: nothing is sent
             return False
         e["remote"] = status
         return True

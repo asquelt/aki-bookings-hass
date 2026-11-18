@@ -13,7 +13,7 @@ from custom_components.aki_bookings.planner import parse_bookings
 from custom_components.aki_bookings.recorder import RecordingManager
 from custom_components.aki_bookings.s3 import S3
 
-from .conftest import NOW, booking
+from .conftest import NOW, booking, iso
 
 GUARD = "input_boolean.tryb_nagrywania"
 OPTIONS = {
@@ -317,6 +317,51 @@ async def test_opt_in_with_nothing_to_send_is_reported_empty(hass, entry, lock, 
     await minutes(hass, freezer, 100)
     assert [r[1] for r in feed.recording_reports] == ["uploading", "empty"]
     assert empty[0].data["had_takes"] is True and "media_upload" not in bridges.calls
+
+
+async def test_a_delivered_link_is_never_replaced_and_the_cards_are_listed_once(hass, entry, lock, feed, bridges, store, freezer):
+    feed.set([booking(recording={"opt_in": True, "status": "none"})])
+    feed.recording_refusals = {"uploading": "recording_delivered"}  # a link went out by another route meanwhile
+    manager = await start(hass, entry)
+    await minutes(hass, freezer, 30)
+    await take(hass, freezer)
+    session_files(bridges)
+    await minutes(hass, freezer, 100)
+    assert feed.recording_refused == [("AB12CD", "uploading")] and feed.recording_reports == []
+    assert manager.find("AB12CD")["state"] == "done" and "media_upload" not in bridges.calls and store.objects == {}
+    assert bridges.calls.count("media_list") == 1
+
+
+async def test_withdrawn_consent_stops_the_upload_without_asking_every_minute(hass, entry, lock, feed, bridges, store, freezer):
+    feed.set([booking(recording={"opt_in": True, "status": "none"})])  # the feed is a moment behind the client's change
+    feed.recording_refusals = {"uploading": "recording_not_opted_in"}
+    manager = await start(hass, entry)
+    await minutes(hass, freezer, 30)
+    await take(hass, freezer)
+    session_files(bridges)
+    await minutes(hass, freezer, 100)
+    assert feed.recording_refused == [("AB12CD", "uploading")] and feed.recording_reports == []
+    assert "media_upload" not in bridges.calls and store.objects == {} and bridges.calls.count("media_list") == 1
+    assert manager.find("AB12CD")["state"] == "waiting"
+
+
+async def test_booking_cancelled_after_its_session_is_still_uploaded(hass, entry, lock, feed, bridges, store, freezer):
+    feed.set([booking(recording={"opt_in": True, "status": "none"})])
+    manager = await start(hass, entry)
+    await minutes(hass, freezer, 30)
+    await take(hass, freezer)
+    session_files(bridges)
+    feed.set([booking(status="cancelled", recording={"opt_in": True, "status": "none"}, updated_at=iso(NOW + timedelta(minutes=50)))])
+    await minutes(hass, freezer, 100)
+    assert [r[1] for r in feed.recording_reports] == ["uploading", "ready"] and manager.find("AB12CD")["state"] == "ready"
+
+
+async def test_booking_cancelled_before_its_start_is_ignored(hass, entry, lock, feed, bridges, store, freezer):
+    feed.set([booking(status="cancelled", recording={"opt_in": True, "status": "none"}, updated_at=iso(NOW - timedelta(hours=1)))])
+    manager = await start(hass, entry)
+    session_files(bridges)
+    await minutes(hass, freezer, 140)
+    assert manager.find("AB12CD") is None and feed.recording_reports == [] and "media_upload" not in bridges.calls
 
 
 async def test_recording_mode_interrupts_a_camera_upload_and_it_resumes(hass, entry, lock, feed, bridges, store, freezer):

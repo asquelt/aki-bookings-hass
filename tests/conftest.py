@@ -121,6 +121,8 @@ class Feed:
         self.reports: list[tuple[str, str, str]] = []  # (ref, code_id, status) of every report that got through
         self.recording_reports: list[tuple] = []  # (ref, status, url, expires_at)
         self.opt_ins: list[tuple] = []
+        self.recording_refusals: dict[str, str] = {}  # status -> error code answered with 409
+        self.recording_refused: list[tuple] = []
         self.set([])
 
     def set(self, bookings: list[dict], status: int = 200) -> None:
@@ -140,6 +142,10 @@ class Feed:
             return AiohttpClientMockResponse(method, url, json={"data": {"code_id": data["code_id"], "status": data["status"], "current": True}})
 
         async def recording(method, url, data):
+            if data["status"] in self.recording_refusals:
+                self.recording_refused.append((str(url).split("/id-")[1].split("/")[0], data["status"]))
+                code = self.recording_refusals[data["status"]]
+                return AiohttpClientMockResponse(method, url, status=409, json={"error": {"code": code, "message": "refused"}})
             self.recording_reports.append((str(url).split("/id-")[1].split("/")[0], data["status"], data.get("url"), data.get("expires_at")))
             return AiohttpClientMockResponse(method, url, json={"data": {"status": data["status"], "expires_at": data.get("expires_at")}})
 
