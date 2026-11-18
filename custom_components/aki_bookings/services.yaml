@@ -1,0 +1,39 @@
+sync_now:
+reconcile_lock:
+revoke_code:
+  fields:
+    booking_id:
+      required: true
+      selector:
+        text:
+set_recording_opt_in:
+  fields:
+    booking_id:
+      required: true
+      selector:
+        text:
+    opt_in:
+      required: true
+      selector:
+        boolean:
+report_recording:
+  fields:
+    booking_id:
+      required: true
+      selector:
+        text:
+    status:
+      required: true
+      selector:
+        select:
+          options: [uploading, ready, failed, empty]
+    url:
+      selector:
+        text:
+          type: url
+    expires_at:
+      selector:
+        datetime:
+    error:
+      selector:
+        text:

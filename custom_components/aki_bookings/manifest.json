@@ -1,0 +1,19 @@
+{
+  "domain": "aki_bookings",
+  "name": "Aki Bookings",
+  "after_dependencies": [
+    "matter",
+    "logbook"
+  ],
+  "codeowners": [
+    "@asquelt"
+  ],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/asquelt/aki-bookings-hass",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/asquelt/aki-bookings-hass/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}

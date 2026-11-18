@@ -1,0 +1,146 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "System rezerwacji",
+        "description": "Token wydaje system rezerwacji: Admin → Ustawienia → Home Assistant. Nowa instalacja startuje w trybie dry-run: nic nie trafia na zamek, dopóki nie wyłączysz go w opcjach.",
+        "data": {
+          "url": "Adres",
+          "token": "Token API (sha_…)",
+          "site_access_token": "Token dostępu do strony (tylko staging)",
+          "lock_entity": "Zamek"
+        },
+        "data_description": {
+          "url": "Bez ścieżki /api/ha/v1, np. https://pero.ro",
+          "lock_entity": "Zamek sparowany bezpośrednio przez Matter"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Nowy token API",
+        "description": "System rezerwacji pod adresem {url} odrzucił token. Wydaj nowy w Admin → Ustawienia → Home Assistant.",
+        "data": {
+          "token": "Token API (sha_…)",
+          "site_access_token": "Token dostępu do strony (tylko staging; puste zostawia obecny)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Brak poprawnej odpowiedzi systemu rezerwacji",
+      "invalid_auth": "Token API został odrzucony",
+      "invalid_site_token": "Bramka strony odrzuciła żądanie: sprawdź token dostępu do strony",
+      "https_required": "Adres musi zaczynać się od https://",
+      "unsupported_api": "System rezerwacji używa wersji API, której ta integracja nie zna"
+    },
+    "abort": {
+      "already_configured": "Ten system rezerwacji jest już skonfigurowany",
+      "reauth_successful": "Token zaktualizowany"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "dry_run": "Tryb dry-run",
+          "dry_run_report": "W dry-run mimo to raportuj status kodów do systemu rezerwacji",
+          "scan_interval": "Okres odpytywania",
+          "slot_limit": "Kody rezerwacji na zamku jednocześnie"
+        },
+        "data_description": {
+          "dry_run": "Działa wszystko poza zapisem na zamku i raportami; każda planowana operacja trafia do logu i na szynę zdarzeń. Włączenie usuwa kody rezerwacji, które już są na zamku.",
+          "dry_run_report": "Tylko dla stagingu systemu rezerwacji: uzna on, że kody są na zamku.",
+          "slot_limit": "Pozostali użytkownicy zamka zostają na kody zakładane ręcznie"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "current_booking": {
+        "name": "Rezerwacja bieżąca"
+      },
+      "next_booking": {
+        "name": "Rezerwacja następna"
+      },
+      "active_codes": {
+        "name": "Kody aktywne",
+        "unit_of_measurement": "kody"
+      },
+      "last_sync": {
+        "name": "Ostatnia synchronizacja"
+      }
+    },
+    "binary_sensor": {
+      "booking_active": {
+        "name": "Rezerwacja aktywna"
+      },
+      "problem": {
+        "name": "Problem"
+      }
+    },
+    "calendar": {
+      "bookings": {
+        "name": "Kalendarz"
+      }
+    }
+  },
+  "services": {
+    "sync_now": {
+      "name": "Synchronizuj teraz",
+      "description": "Natychmiast pobiera rezerwacje i uzgadnia zamek, np. po regeneracji PIN-u w systemie rezerwacji."
+    },
+    "reconcile_lock": {
+      "name": "Uzgodnij zamek",
+      "description": "Odczytuje zamek i naprawia różnice bez odpytywania systemu rezerwacji."
+    },
+    "revoke_code": {
+      "name": "Wycofaj kod",
+      "description": "Od razu usuwa kod rezerwacji z zamka bez anulowania rezerwacji. Kod wróci dopiero po regeneracji PIN-u.",
+      "fields": {
+        "booking_id": {
+          "name": "Rezerwacja",
+          "description": "Id rezerwacji albo jej 6-znakowy ref."
+        }
+      }
+    },
+    "set_recording_opt_in": {
+      "name": "Ustaw zgodę na nagrania",
+      "description": "Zapisuje wybór klienta dotyczący wysyłki nagrań. Błąd, gdy wysyłka już ruszyła.",
+      "fields": {
+        "booking_id": {
+          "name": "Rezerwacja",
+          "description": "Id rezerwacji albo jej 6-znakowy ref."
+        },
+        "opt_in": {
+          "name": "Wysyłaj nagrania",
+          "description": "Czy nagrania mają zostać wysłane."
+        }
+      }
+    },
+    "report_recording": {
+      "name": "Zgłoś stan nagrań",
+      "description": "Raportuje postęp wysyłki do systemu rezerwacji, który wysyła maile.",
+      "fields": {
+        "booking_id": {
+          "name": "Rezerwacja",
+          "description": "Id rezerwacji albo jej 6-znakowy ref."
+        },
+        "status": {
+          "name": "Status",
+          "description": "uploading, ready, failed albo empty."
+        },
+        "url": {
+          "name": "Link do pobrania",
+          "description": "Link https dla klienta; wymagany dla ready."
+        },
+        "expires_at": {
+          "name": "Link wygasa",
+          "description": "Wymagane dla ready; musi być w przyszłości."
+        },
+        "error": {
+          "name": "Błąd",
+          "description": "Co poszło nie tak, dla failed."
+        }
+      }
+    }
+  }
+}

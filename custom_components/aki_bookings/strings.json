@@ -1,0 +1,146 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Booking system",
+        "description": "Mint the token in the booking system: Admin → Settings → Home Assistant. A fresh install starts in dry-run: nothing is written to the lock until you switch it off in the options.",
+        "data": {
+          "url": "Address",
+          "token": "API token (sha_…)",
+          "site_access_token": "Site access token (staging only)",
+          "lock_entity": "Lock"
+        },
+        "data_description": {
+          "url": "Without the /api/ha/v1 path, e.g. https://pero.ro",
+          "lock_entity": "A lock paired directly over Matter"
+        }
+      },
+      "reauth_confirm": {
+        "title": "New API token",
+        "description": "The booking system at {url} refused the token. Mint a new one in Admin → Settings → Home Assistant.",
+        "data": {
+          "token": "API token (sha_…)",
+          "site_access_token": "Site access token (staging only; empty keeps the current one)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "No valid answer from the booking system",
+      "invalid_auth": "The API token was refused",
+      "invalid_site_token": "The site gate refused the request: check the site access token",
+      "https_required": "The address must start with https://",
+      "unsupported_api": "The booking system speaks an API version this integration does not know"
+    },
+    "abort": {
+      "already_configured": "This booking system is already configured",
+      "reauth_successful": "Token updated"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "dry_run": "Dry-run",
+          "dry_run_report": "In dry-run, still report code status to the booking system",
+          "scan_interval": "Polling period",
+          "slot_limit": "Booking codes on the lock at once"
+        },
+        "data_description": {
+          "dry_run": "Everything runs except writing to the lock and reporting; each planned operation is logged and fired as an event. Switching it on removes the booking codes already on the lock.",
+          "dry_run_report": "Only for a staging booking system: it will believe the codes are on the lock.",
+          "slot_limit": "The rest of the lock's users stay free for codes made by hand"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "current_booking": {
+        "name": "Current booking"
+      },
+      "next_booking": {
+        "name": "Next booking"
+      },
+      "active_codes": {
+        "name": "Active codes",
+        "unit_of_measurement": "codes"
+      },
+      "last_sync": {
+        "name": "Last sync"
+      }
+    },
+    "binary_sensor": {
+      "booking_active": {
+        "name": "Booking active"
+      },
+      "problem": {
+        "name": "Problem"
+      }
+    },
+    "calendar": {
+      "bookings": {
+        "name": "Bookings"
+      }
+    }
+  },
+  "services": {
+    "sync_now": {
+      "name": "Sync now",
+      "description": "Fetch the bookings and reconcile the lock right away, e.g. after regenerating a PIN in the booking system."
+    },
+    "reconcile_lock": {
+      "name": "Reconcile lock",
+      "description": "Read the lock and fix differences without asking the booking system."
+    },
+    "revoke_code": {
+      "name": "Revoke code",
+      "description": "Take a booking's code off the lock now without cancelling the booking. The code returns only after its PIN is regenerated.",
+      "fields": {
+        "booking_id": {
+          "name": "Booking",
+          "description": "Booking id or its 6-character ref."
+        }
+      }
+    },
+    "set_recording_opt_in": {
+      "name": "Set recording opt-in",
+      "description": "Record the client's choice about uploading the recordings. Fails once the upload has started.",
+      "fields": {
+        "booking_id": {
+          "name": "Booking",
+          "description": "Booking id or its 6-character ref."
+        },
+        "opt_in": {
+          "name": "Upload recordings",
+          "description": "Whether the recordings should be uploaded."
+        }
+      }
+    },
+    "report_recording": {
+      "name": "Report recording",
+      "description": "Report upload progress to the booking system, which sends the e-mails.",
+      "fields": {
+        "booking_id": {
+          "name": "Booking",
+          "description": "Booking id or its 6-character ref."
+        },
+        "status": {
+          "name": "Status",
+          "description": "uploading, ready, failed or empty."
+        },
+        "url": {
+          "name": "Download link",
+          "description": "https link for the client; required for ready."
+        },
+        "expires_at": {
+          "name": "Link expires at",
+          "description": "Required for ready; must be in the future."
+        },
+        "error": {
+          "name": "Error",
+          "description": "What went wrong, for failed."
+        }
+      }
+    }
+  }
+}
