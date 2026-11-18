@@ -35,7 +35,7 @@ async def test_code_goes_on_at_window_start_and_off_at_its_end(hass, entry, lock
     assert lock.users == {} and feed.reports == []
 
     await advance(hass, freezer, minutes=45, seconds=2)  # the boundary timer, not the 5-minute poll
-    assert lock.names == {1: "RES-AB12CD"} and lock.users[1]["pin"] == "012345"
+    assert lock.names == {1: "R-AB12CD"} and lock.users[1]["pin"] == "012345"
     assert feed.reports == [("AB12CD", "code-1", "applied")]
     assert len(applied) == 1 and applied[0].data["ref"] == "AB12CD" and not applied[0].data["dry_run"]
     assert "pin" not in applied[0].data
@@ -75,7 +75,7 @@ async def test_dry_run_touches_nothing(hass, entry, lock, feed, freezer):
 async def test_switching_to_dry_run_takes_real_codes_off(hass, entry, lock, feed, freezer):
     feed.set([booking()])
     await setup(hass, entry)
-    assert lock.names == {1: "RES-AB12CD"}
+    assert lock.names == {1: "R-AB12CD"}
     hass.config_entries.async_update_entry(entry, options={"dry_run": True})
     await hass.async_block_till_done(wait_background_tasks=True)
     assert lock.users == {}
@@ -108,10 +108,10 @@ async def test_booking_gone_from_a_good_feed_removes_code_but_a_bad_feed_does_no
     del bad["start"]
     feed.set([bad])
     await advance(hass, freezer, minutes=5)
-    assert lock.names == {1: "RES-AB12CD"}  # an unreadable record is not "gone"
+    assert lock.names == {1: "R-AB12CD"}  # an unreadable record is not "gone"
     feed.set_down(True)
     await advance(hass, freezer, minutes=5)
-    assert lock.names == {1: "RES-AB12CD"}
+    assert lock.names == {1: "R-AB12CD"}
     feed.set_down(False)
     feed.set([])
     await advance(hass, freezer, minutes=5)
@@ -157,7 +157,7 @@ async def test_three_timeouts_then_error_then_recovery(hass, entry, lock, feed, 
     await advance(hass, freezer, seconds=61)
     assert feed.reports == [("AB12CD", "code-1", "failed")] and len(failed) == 1
     await advance(hass, freezer, seconds=121)
-    assert lock.names == {1: "RES-AB12CD"}
+    assert lock.names == {1: "R-AB12CD"}
     assert feed.reports[-1] == ("AB12CD", "code-1", "applied")
 
 
@@ -168,7 +168,7 @@ async def test_orphan_is_removed_and_manual_users_are_left_alone(hass, entry, lo
     feed.set([booking()])
     removed = async_capture_events(hass, f"{DOMAIN}_code_removed")
     await setup(hass, entry)
-    assert lock.names == {1: "Kasia", 2: "RES-AB12CD", 3: None}
+    assert lock.names == {1: "Kasia", 2: "R-AB12CD", 3: None}
     assert removed[0].data["reason"] == "orphan" and removed[0].data["ref"] == "OLD001"
 
 
@@ -177,7 +177,7 @@ async def test_slot_limit(hass, entry, lock, feed, freezer):
     feed.set([booking(f"S{i}", NOW, 2, f"11111{i}", f"c{i}") for i in (1, 2, 3)])
     failed = async_capture_events(hass, f"{DOMAIN}_code_failed")
     await setup(hass, entry)
-    assert sorted(n for n in lock.names.values()) == ["RES-S1", "RES-S2"]
+    assert sorted(n for n in lock.names.values()) == ["R-S1", "R-S2"]
     assert ("S3", "c3", "failed") in feed.reports and "no free slots" in failed[0].data["error"]
 
 
@@ -190,7 +190,7 @@ async def test_lock_unavailable_pauses_and_resumes(hass, entry, lock, feed, free
     assert lock.calls == [] and not failed and feed.reports == []
     hass.states.async_set(LOCK, "locked")
     await hass.async_block_till_done(wait_background_tasks=True)
-    assert lock.names == {1: "RES-AB12CD"}
+    assert lock.names == {1: "R-AB12CD"}
 
 
 async def test_restart_keeps_the_code_and_does_not_write_it_twice(hass, entry, lock, feed, freezer):
@@ -198,7 +198,7 @@ async def test_restart_keeps_the_code_and_does_not_write_it_twice(hass, entry, l
     await setup(hass, entry)
     assert await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done(wait_background_tasks=True)
-    assert lock.calls.count("set_lock_credential") == 1 and lock.names == {1: "RES-AB12CD"}
+    assert lock.calls.count("set_lock_credential") == 1 and lock.names == {1: "R-AB12CD"}
     assert feed.reports == [("AB12CD", "code-1", "applied")]
 
 
@@ -207,7 +207,7 @@ async def test_code_deleted_by_hand_is_written_again(hass, entry, lock, feed, fr
     await setup(hass, entry)
     lock.users.clear()
     await advance(hass, freezer, minutes=5)
-    assert lock.names == {1: "RES-AB12CD"}
+    assert lock.names == {1: "R-AB12CD"}
 
 
 async def test_revoke_code_service(hass, entry, lock, feed, freezer):
@@ -224,5 +224,26 @@ async def test_revoked_token_starts_reauth_and_keeps_serving_the_last_feed(hass,
     await setup(hass, entry)
     feed.set([], status=401)
     await advance(hass, freezer, minutes=5)
-    assert lock.names == {1: "RES-AB12CD"}
+    assert lock.names == {1: "R-AB12CD"}
     assert any(f["context"]["source"] == "reauth" for f in hass.config_entries.flow.async_progress())
+
+
+async def test_user_left_by_0_1_0_is_replaced_without_a_duplicate(hass, entry, lock, feed, freezer):
+    """0.1.0 named users RES-<ref>, which the U200 cut to nine characters."""
+    feed.set([booking()])
+    failed = async_capture_events(hass, f"{DOMAIN}_code_failed")
+    await setup(hass, entry)
+    lock.users[1]["user_name"] = "RES-AB12C\x00"  # what 0.1.0 left behind, still in the store as slot 1
+    await advance(hass, freezer, minutes=5)
+    assert lock.names == {1: "R-AB12CD"} and lock.users[1]["pin"] == "012345"
+    assert not failed and ("AB12CD", "code-1", "failed") not in feed.reports
+    await advance(hass, freezer, minutes=5)
+    assert lock.calls.count("set_lock_credential") == 2
+
+
+async def test_cut_name_still_matches(hass, entry, lock, feed, freezer):
+    feed.set([booking()])
+    await setup(hass, entry)
+    lock.users[1]["user_name"] = "R-AB12C\x00"  # a lock stricter than the U200
+    await advance(hass, freezer, minutes=5)
+    assert lock.calls.count("set_lock_credential") == 1 and feed.reports == [("AB12CD", "code-1", "applied")]

@@ -7,7 +7,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-USER_PREFIX = "RES-"
+# Matter allows 10 characters for a user name, but the Aqara U200 keeps only 9 ("RES-FZKBEP" came
+# back as "RES-FZKBE\x00"), so the name is "R-" plus the 6-character ref: 8 characters.
+USER_PREFIX = "R-"
+LEGACY_PREFIXES = ("RES-",)  # users written by 0.1.0; nothing matches them any more, so they go as orphans
 
 REASON_ENDED = "ended"
 REASON_CANCELLED = "cancelled"
@@ -144,25 +147,37 @@ def user_at(users: list[dict], index: int | None) -> dict | None:
     return next((u for u in users if u.get("user_index") == index), None)
 
 
+def lock_name(user: dict | None) -> str:
+    """The user's name as text. Locks pad or cut it: the U200 returns 'RES-FZKBE\x00' for 'RES-FZKBEP'."""
+    return str((user or {}).get("user_name") or "").replace("\x00", "").strip()
+
+
 def is_ours(user: dict) -> bool:
-    return str(user.get("user_name") or "").startswith(USER_PREFIX)
+    return lock_name(user).startswith((USER_PREFIX, *LEGACY_PREFIXES))
+
+
+def name_matches(name: str, ref: str) -> bool:
+    """Does a name read back from the lock stand for R-<ref>, possibly cut short by the lock?"""
+    wanted = f"{USER_PREFIX}{ref}"
+    return len(name) >= len(USER_PREFIX) + 3 and wanted.startswith(name)
 
 
 def record_matches_user(record: dict, user: dict | None) -> bool:
     """Is the lock user at the stored index really the one this record created?
 
-    A named record must find its RES-<ref> name. A record whose naming step never succeeded
-    matches only a nameless user, so a slot reused by someone else by hand is never touched.
+    A named record must find its R-<ref> name (the lock may have cut its tail). A record whose
+    naming step never succeeded matches only a nameless user, so a slot reused by someone else
+    by hand is never touched.
     """
     if user is None:
         return False
-    name = str(user.get("user_name") or "")
-    if record.get("named"):
-        return name == f"{USER_PREFIX}{record.get('ref')}"
-    return name == "" or name == f"{USER_PREFIX}{record.get('ref')}"
+    name = lock_name(user)
+    if name_matches(name, str(record.get("ref"))):
+        return True
+    return not record.get("named") and name == ""
 
 
 def orphan_users(users: list[dict], codes: dict[str, dict]) -> list[dict]:
-    """RES- users on the lock that no stored record accounts for (e.g. after a restored backup)."""
+    """Our users on the lock that no stored record accounts for (e.g. after a restored backup)."""
     known = {r.get("user_index") for r in codes.values() if r.get("user_index") is not None}
     return [u for u in users if is_ours(u) and u.get("user_index") not in known]

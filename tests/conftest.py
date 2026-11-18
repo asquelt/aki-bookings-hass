@@ -94,7 +94,9 @@ class FakeLock:
 
     async def _set_user(self, call: ServiceCall) -> None:
         self._enter(call)
-        self.users[call.data["user_index"]]["user_name"] = call.data["user_name"]
+        name = call.data["user_name"]
+        # Like the Aqara U200: ten bytes including the terminator, so the tenth character is lost.
+        self.users[call.data["user_index"]]["user_name"] = name[:9] + "\x00" if len(name) > 9 else name
 
     async def _clear_user(self, call: ServiceCall) -> None:
         self._enter(call)

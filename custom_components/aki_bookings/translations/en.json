@@ -62,8 +62,7 @@
         "name": "Next booking"
       },
       "active_codes": {
-        "name": "Active codes",
-        "unit_of_measurement": "codes"
+        "name": "Active codes"
       },
       "last_sync": {
         "name": "Last sync"

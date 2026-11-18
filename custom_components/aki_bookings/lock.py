@@ -12,6 +12,7 @@ from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
 
 from .const import LOCK_CALL_TIMEOUT_S
+from .planner import USER_PREFIX
 
 
 class LockError(Exception):
@@ -96,7 +97,7 @@ class DryRunLock:
             if rec.get("user_index") is not None:
                 self._users[rec["user_index"]] = {
                     "user_index": rec["user_index"],
-                    "user_name": f"RES-{rec.get('ref')}" if rec.get("named") else None,
+                    "user_name": f"{USER_PREFIX}{rec.get('ref')}" if rec.get("named") else None,
                 }
 
     async def info(self) -> dict:

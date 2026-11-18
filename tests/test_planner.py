@@ -70,14 +70,14 @@ def test_removal_reasons():
 def test_slot_reused_by_hand_is_never_ours():
     named = {"ref": "AB12CD", "named": True, "user_index": 3}
     unnamed = {"ref": "AB12CD", "named": False, "user_index": 3}
-    assert record_matches_user(named, {"user_index": 3, "user_name": "RES-AB12CD"})
+    assert record_matches_user(named, {"user_index": 3, "user_name": "R-AB12CD"})
     assert not record_matches_user(named, {"user_index": 3, "user_name": "Kasia"})
-    assert not record_matches_user(named, {"user_index": 3, "user_name": "RES-OTHER1"})
+    assert not record_matches_user(named, {"user_index": 3, "user_name": "R-OTHER1"})
     assert record_matches_user(unnamed, {"user_index": 3, "user_name": None})
     assert not record_matches_user(unnamed, {"user_index": 3, "user_name": "Kasia"})
     assert not record_matches_user(named, None)
 
 
 def test_orphans_are_only_unaccounted_res_users():
-    users = [{"user_index": 1, "user_name": "Kasia"}, {"user_index": 2, "user_name": "RES-AB12CD"}, {"user_index": 3, "user_name": "RES-OLD001"}, {"user_index": 4, "user_name": None}]
+    users = [{"user_index": 1, "user_name": "Kasia"}, {"user_index": 2, "user_name": "R-AB12CD"}, {"user_index": 3, "user_name": "RES-OLD001"}, {"user_index": 4, "user_name": None}]
     assert [u["user_index"] for u in orphan_users(users, {"c": {"user_index": 2}})] == [3]

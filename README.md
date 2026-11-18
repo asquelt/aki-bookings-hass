@@ -48,12 +48,12 @@ Every poll (and exactly at each window edge) the integration compares what shoul
 with what the lock reports:
 
 - A confirmed booking whose `valid_from ≤ now < valid_to` gets its PIN written as a new lock user
-  named `RES-<ref>`. The code is reported `applied` only after the lock confirms it.
+  named `R-<ref>` (8 characters: the Aqara U200 keeps only 9 of Matter's 10). The code is reported `applied` only after the lock confirms it.
 - A code is removed when its window ends, the booking is cancelled, its PIN is regenerated
   (new `code_id`), or the booking is missing from a successful feed.
 - A failed feed removes nothing: the integration keeps working from the last good one, so codes
   still come off on time. Status reports wait in a queue and go out in order.
-- Lock users without the `RES-` prefix are never touched. A `RES-` user the integration has no
+- Lock users without the `R-` prefix are never touched (`RES-` from 0.1.0 counts as ours too). Such a user the integration has no
   record of is removed as an orphan.
 - A failed lock operation is retried after 30 s and 60 s; the third failure puts the code in the
   Error state (`failed` reported, event fired) and it is retried on every later pass.

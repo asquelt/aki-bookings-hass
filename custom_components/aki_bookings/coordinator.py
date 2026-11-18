@@ -48,6 +48,7 @@ from .planner import (
     Booking,
     current_booking,
     desired_codes,
+    lock_name,
     next_boundary,
     orphan_users,
     parse_bookings,
@@ -263,7 +264,16 @@ class BookingCoordinator(DataUpdateCoordinator[list[Booking]]):
                 self._fire(EVENT_CODE_REMOVED, rec, code_id, dry, reason=reason)
                 _LOGGER.info("Code for booking %s removed from the lock (%s)%s", rec.get("ref"), reason, " [dry-run]" if dry else "")
 
-        # 2. RES- users nobody accounts for.
+        # A wanted code whose lock user is gone or no longer carries our name: forget the slot now,
+        # so that a renamed leftover of ours is cleared as an orphan before the PIN is written again
+        # (otherwise the lock would answer "duplicate").
+        for code_id in desired:
+            rec = codes.get(code_id)
+            if rec and rec.get("user_index") is not None and not record_matches_user(rec, user_at(users, rec["user_index"])):
+                _LOGGER.warning("Code for booking %s is not on the lock where it was written; writing it again", rec.get("ref"))
+                rec.update(user_index=None, credential_index=None, named=False, state=STATE_PENDING)
+
+        # 2. Our users (R-…, or RES-… from 0.1.0) nobody accounts for.
         for user in orphan_users(users, codes):
             try:
                 await lock.clear_user(user["user_index"])
@@ -273,7 +283,7 @@ class BookingCoordinator(DataUpdateCoordinator[list[Booking]]):
             users.remove(user)
             _LOGGER.warning("Removed orphan lock user %s (slot %s): not in the integration's store", user.get("user_name"), user.get("user_index"))
             self.hass.bus.async_fire(EVENT_CODE_REMOVED, {
-                "booking_id": None, "ref": str(user.get("user_name"))[4:], "code_id": None, "reason": REASON_ORPHAN, "dry_run": dry,
+                "booking_id": None, "ref": lock_name(user).split("-", 1)[-1], "code_id": None, "reason": REASON_ORPHAN, "dry_run": dry,
             })
 
         # 3. Codes that should be on the lock.
@@ -283,9 +293,6 @@ class BookingCoordinator(DataUpdateCoordinator[list[Booking]]):
             if not on_lock:
                 if rec is None:
                     rec = codes[code_id] = {"booking_id": booking.id, "ref": booking.ref, "state": STATE_PENDING, "attempts": 0}
-                elif rec.get("state") == STATE_APPLIED:
-                    _LOGGER.warning("Code for booking %s vanished from the lock; writing it again", booking.ref)
-                    rec["state"] = STATE_PENDING
                 rec.update(user_index=None, credential_index=None, named=False, valid_to=iso(booking.valid_to))
                 held = sum(1 for r in codes.values() if r.get("credential_index") is not None)
                 if held >= self.slot_limit or (max_users and len(users) >= max_users):

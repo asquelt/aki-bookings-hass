@@ -62,8 +62,7 @@
         "name": "Rezerwacja następna"
       },
       "active_codes": {
-        "name": "Kody aktywne",
-        "unit_of_measurement": "kody"
+        "name": "Kody aktywne"
       },
       "last_sync": {
         "name": "Ostatnia synchronizacja"
