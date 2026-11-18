@@ -37,3 +37,15 @@ report_recording:
     error:
       selector:
         text:
+resolve_recordings:
+  fields:
+    booking_id:
+      required: true
+      selector:
+        text:
+    action:
+      required: true
+      selector:
+        select:
+          options: [upload, delete, keep]
+run_recordings:

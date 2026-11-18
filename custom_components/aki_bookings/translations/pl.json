@@ -39,6 +39,13 @@
   "options": {
     "step": {
       "init": {
+        "title": "Aki Bookings",
+        "menu_options": {
+          "codes": "Kody do drzwi",
+          "recordings": "Nagrania"
+        }
+      },
+      "codes": {
         "data": {
           "dry_run": "Tryb dry-run",
           "dry_run_report": "W dry-run mimo to raportuj status kodów do systemu rezerwacji",
@@ -49,8 +56,35 @@
           "dry_run": "Działa wszystko poza zapisem na zamku i raportami; każda planowana operacja trafia do logu i na szynę zdarzeń. Włączenie usuwa kody rezerwacji, które już są na zamku.",
           "dry_run_report": "Tylko dla stagingu systemu rezerwacji: uzna on, że kody są na zamku.",
           "slot_limit": "Pozostali użytkownicy zamka zostają na kody zakładane ręcznie"
+        },
+        "title": "Kody do drzwi"
+      },
+      "recordings": {
+        "title": "Nagrania",
+        "description": "Nagrania są wysyłane tylko dla rezerwacji ze zgodą klienta, nocą, przez mostki kamer (a74_bridge). Klucze magazynu potrzebują prawa odczytu, zapisu i usuwania w buckecie, do którego wysyłają mostki.",
+        "data": {
+          "recordings_enabled": "Obsługa nagrań",
+          "guard_entity": "Encja trybu nagrywania",
+          "s3_endpoint": "Adres magazynu",
+          "s3_bucket": "Bucket",
+          "s3_access_key": "Access key ID",
+          "s3_secret_key": "Secret access key",
+          "s3_root": "Katalog w buckecie",
+          "download_days": "Dni na pobranie"
+        },
+        "data_description": {
+          "guard_entity": "Włączona, gdy trwa ujęcie. Jej zmiany tworzą dziennik ujęć; wysyłka nigdy nie działa, gdy jest włączona.",
+          "s3_endpoint": "Dla Cloudflare R2: https://<id konta>.r2.cloudflarestorage.com",
+          "s3_access_key": "Puste pole zostawia zapisany klucz",
+          "s3_secret_key": "Puste pole zostawia zapisany klucz",
+          "s3_root": "Każda rezerwacja dostaje własny podkatalog z losowym składnikiem",
+          "download_days": "Po tym czasie pliki są kasowane z bucketu. Podpisane linki nie mogą żyć dłużej niż 7 dni."
         }
       }
+    },
+    "error": {
+      "storage_incomplete": "Uzupełnij adres, bucket i oba klucze, zanim włączysz obsługę nagrań",
+      "storage_refused": "Magazyn odrzucił klucze albo jest nieosiągalny"
     }
   },
   "entity": {
@@ -66,6 +100,9 @@
       },
       "last_sync": {
         "name": "Ostatnia synchronizacja"
+      },
+      "recordings": {
+        "name": "Nagrania"
       }
     },
     "binary_sensor": {
@@ -140,6 +177,24 @@
           "description": "Co poszło nie tak, dla failed."
         }
       }
+    },
+    "resolve_recordings": {
+      "name": "Rozstrzygnij nagrania",
+      "description": "Decyzja operatora o nagraniach, które zostały na kartach albo dysku konsoli po sesji.",
+      "fields": {
+        "booking_id": {
+          "name": "Rezerwacja",
+          "description": "Id rezerwacji albo jej 6-znakowy ref."
+        },
+        "action": {
+          "name": "Decyzja",
+          "description": "upload: zgoda w imieniu klienta i wysyłka najbliższej nocy; keep: zapytaj ponownie jutro; delete: jeszcze niedostępne."
+        }
+      }
+    },
+    "run_recordings": {
+      "name": "Uruchom przebieg nagrań",
+      "description": "Uruchamia jeden przebieg obsługi nagrań od razu, bez czekania do następnej minuty. Wszystkie warunki bezpieczeństwa nadal obowiązują."
     }
   }
 }

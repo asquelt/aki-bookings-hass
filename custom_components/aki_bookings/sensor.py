@@ -23,6 +23,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AkiConfigEntry, async_ad
         BookingSensor(coordinator, "next_booking"),
         ActiveCodesSensor(coordinator),
         LastSyncSensor(coordinator),
+        RecordingsSensor(coordinator),
     ])
 
 
@@ -111,4 +112,31 @@ class LastSyncSensor(AkiEntity, SensorEntity):
             "error_message": c.last_error,
             "consecutive_failures": c.failures,
             "pending_reports": len(c.reports),
+        }
+
+
+class RecordingsSensor(AkiEntity, SensorEntity):
+    """Sessions whose recordings still need something: an upload, a decision, or deletion at expiry."""
+
+    def __init__(self, coordinator: BookingCoordinator) -> None:
+        super().__init__(coordinator, "recordings")
+
+    @property
+    def native_value(self) -> int:
+        manager = self.coordinator.recordings
+        return len(manager.overview()) if manager else 0
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        manager = self.coordinator.recordings
+        if manager is None:
+            return {}
+        active = manager.active
+        return {
+            "enabled": manager.enabled,
+            "active": active["ref"] if active else None,
+            "phase": active.get("phase") if active else None,
+            "sessions": manager.overview(),
+            "open_take": bool(manager.journal and manager.journal[-1].get("stop") is None),
+            "last_error": manager.last_error,
         }

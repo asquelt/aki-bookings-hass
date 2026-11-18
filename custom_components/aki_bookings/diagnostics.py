@@ -9,7 +9,7 @@ from homeassistant.core import HomeAssistant
 from . import AkiConfigEntry
 from .const import CONF_SITE_TOKEN, CONF_TOKEN
 
-REDACT = {CONF_TOKEN, CONF_SITE_TOKEN, "pin", "guest_first_name", "entity_name"}
+REDACT = {CONF_TOKEN, CONF_SITE_TOKEN, "pin", "guest_first_name", "entity_name", "s3_access_key", "s3_secret_key"}
 
 
 async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: AkiConfigEntry) -> dict[str, Any]:
@@ -29,4 +29,5 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: AkiConf
         "dry_codes": c.dry_codes,
         "revoked": sorted(c.revoked),
         "pending_reports": c.reports,
+        "recordings": {"journal": c.recordings.journal, "register": c.recordings.register, "last_error": c.recordings.last_error} if c.recordings else None,
     }, REDACT)

@@ -101,10 +101,60 @@ All four appear in the logbook.
 
 `booking_id` accepts the booking id or its 6-character ref.
 
-## Not here yet
+## Recordings
 
-The recording pipeline (take journal, nightly upload through the camera bridges, download page,
-clean-up) is not implemented; only the two reporting actions above exist.
+Off by default (options → Recordings). Needs the `a74_bridge` integration, whose bridges do the
+actual transfer from the camera cards and the console disk straight into an S3-compatible bucket
+(Cloudflare R2). Home Assistant moves no media; it decides what goes where and when.
+
+**Only with the client's opt-in.** A booking is uploaded only when the booking system says
+`recording.opt_in: true`. The choice is read fresh right before the upload starts, and reporting
+`uploading` locks it.
+
+What happens, by itself:
+
+1. **Take journal.** Every on/off of the recording-mode entity is a take, tagged with the booking
+   whose code window was open. The journal is kept even while the pipeline is off.
+2. **After the day's last session** (nobody in, recording mode off, at least 60 minutes to the next
+   code window) the cards and the console disk are listed once and every finished session is sorted out:
+   - opt-in and files: reported `uploading`, then sent: cameras first (they lose remote control
+     while sending), console ISO after. Up to three tries a night; files already in the bucket are skipped;
+   - opt-in but no files: reported `empty`;
+   - no opt-in but files: event `aki_bookings_recordings_left`, repeated daily until the operator decides;
+   - no opt-in, no files: event `aki_bookings_recordings_none`.
+3. **A file belongs to a booking** when it was recorded during one of its takes (±10 s) or, outside
+   any take, inside the booking's code window. Any other file belongs to nobody and is never
+   uploaded: it may be the previous client's.
+4. **Interruption.** A camera upload is cancelled 18 minutes before the next code window, and at
+   once when recording mode comes on or a code window opens. It resumes when the conditions return.
+5. **When everything is in the bucket** the sizes are checked against the sources, `index.html`
+   (one signed link per file) and `links.txt` are written, and the signed link to the page is
+   reported as `ready` with its expiry. The link is never in a state, an attribute, an event or a log.
+6. **After the download time** (1–7 days, default 7) the booking's folder is deleted from the bucket.
+7. **Three nights without progress** report `failed`; the upload then waits for the operator.
+
+The register behind this holds no client data: booking id, ref, times, the choice, file names.
+
+| Option | Default | Notes |
+| --- | --- | --- |
+| Recording pipeline | off | The journal is kept either way |
+| Recording-mode entity | `input_boolean.tryb_nagrywania` | On while a take is recorded |
+| Storage endpoint, bucket, keys | | Read, write and delete rights on the bucket the bridges upload to |
+| Folder in the bucket | `nagrania` | Each booking gets `<folder>/<ref>-<random>` |
+| Days to download | 7 | Signed links cannot live longer |
+
+The Recordings sensor counts sessions that still need something; its attributes list them with
+state (`waiting`, `uploading`, `ready`, `failed`, `left`), files sent and the active phase.
+
+More events: `aki_bookings_recordings_ready`, `_failed`, `_empty`, `_left`, `_none`,
+`_unassigned` (files outside any booking), `_deleted`.
+
+More actions: `aki_bookings.resolve_recordings` (`booking_id`, `action`: `upload` opts in on the
+client's behalf, `keep` asks again tomorrow) and `aki_bookings.run_recordings` (one pass now; every
+safety condition still applies).
+
+Not here yet: deleting files from the camera cards and the console disk (the bridges cannot do it),
+so `resolve_recordings` with `delete` is refused and uploaded files stay on the sources.
 
 ## Development
 

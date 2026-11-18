@@ -39,6 +39,13 @@
   "options": {
     "step": {
       "init": {
+        "title": "Aki Bookings",
+        "menu_options": {
+          "codes": "Door codes",
+          "recordings": "Recordings"
+        }
+      },
+      "codes": {
         "data": {
           "dry_run": "Dry-run",
           "dry_run_report": "In dry-run, still report code status to the booking system",
@@ -49,8 +56,35 @@
           "dry_run": "Everything runs except writing to the lock and reporting; each planned operation is logged and fired as an event. Switching it on removes the booking codes already on the lock.",
           "dry_run_report": "Only for a staging booking system: it will believe the codes are on the lock.",
           "slot_limit": "The rest of the lock's users stay free for codes made by hand"
+        },
+        "title": "Door codes"
+      },
+      "recordings": {
+        "title": "Recordings",
+        "description": "Recordings are uploaded only for bookings with the client's opt-in, at night, through the camera bridges (a74_bridge). The storage keys need read, write and delete rights on the bucket the bridges upload to.",
+        "data": {
+          "recordings_enabled": "Recording pipeline",
+          "guard_entity": "Recording-mode entity",
+          "s3_endpoint": "Storage endpoint",
+          "s3_bucket": "Bucket",
+          "s3_access_key": "Access key ID",
+          "s3_secret_key": "Secret access key",
+          "s3_root": "Folder in the bucket",
+          "download_days": "Days to download"
+        },
+        "data_description": {
+          "guard_entity": "On while a take is being recorded. Its changes make the take journal; uploads never run while it is on.",
+          "s3_endpoint": "For Cloudflare R2: https://<account id>.r2.cloudflarestorage.com",
+          "s3_access_key": "Leave empty to keep the stored key",
+          "s3_secret_key": "Leave empty to keep the stored key",
+          "s3_root": "Each booking gets its own subfolder with a random part",
+          "download_days": "After that the files are deleted from the bucket. Signed links cannot live longer than 7 days."
         }
       }
+    },
+    "error": {
+      "storage_incomplete": "Fill in the endpoint, the bucket and both keys before switching the pipeline on",
+      "storage_refused": "The storage refused the keys or cannot be reached"
     }
   },
   "entity": {
@@ -66,6 +100,9 @@
       },
       "last_sync": {
         "name": "Last sync"
+      },
+      "recordings": {
+        "name": "Recordings"
       }
     },
     "binary_sensor": {
@@ -140,6 +177,24 @@
           "description": "What went wrong, for failed."
         }
       }
+    },
+    "resolve_recordings": {
+      "name": "Resolve recordings",
+      "description": "The operator's decision about recordings left on the cards or the console disk after a session.",
+      "fields": {
+        "booking_id": {
+          "name": "Booking",
+          "description": "Booking id or its 6-character ref."
+        },
+        "action": {
+          "name": "Decision",
+          "description": "upload: opt in on the client's behalf and send them next night; keep: ask again tomorrow; delete: not available yet."
+        }
+      }
+    },
+    "run_recordings": {
+      "name": "Run recording pass",
+      "description": "Run one pass of the recording pipeline now instead of waiting for the next minute. All safety conditions still apply."
     }
   }
 }

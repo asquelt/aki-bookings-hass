@@ -82,6 +82,7 @@ class BookingCoordinator(DataUpdateCoordinator[list[Booking]]):
         self.failures = 0
         self.auth_failed = False
         self.lock_error: str | None = None
+        self.recordings = None  # RecordingManager, set by async_setup_entry
         self._pass_lock = asyncio.Lock()
         self._retry_in: float | None = None
         self._unsub_timer: CALLBACK_TYPE | None = None

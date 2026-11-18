@@ -119,6 +119,8 @@ class Feed:
         self.mock = aioclient_mock
         self.down = False
         self.reports: list[tuple[str, str, str]] = []  # (ref, code_id, status) of every report that got through
+        self.recording_reports: list[tuple] = []  # (ref, status, url, expires_at)
+        self.opt_ins: list[tuple] = []
         self.set([])
 
     def set(self, bookings: list[dict], status: int = 200) -> None:
@@ -137,8 +139,18 @@ class Feed:
             self.reports.append((str(url).split("/id-")[1].split("/")[0], data["code_id"], data["status"]))
             return AiohttpClientMockResponse(method, url, json={"data": {"code_id": data["code_id"], "status": data["status"], "current": True}})
 
+        async def recording(method, url, data):
+            self.recording_reports.append((str(url).split("/id-")[1].split("/")[0], data["status"], data.get("url"), data.get("expires_at")))
+            return AiohttpClientMockResponse(method, url, json={"data": {"status": data["status"], "expires_at": data.get("expires_at")}})
+
+        async def opt_in(method, url, data):
+            self.opt_ins.append((str(url).split("/id-")[1].split("/")[0], data["opt_in"]))
+            return AiohttpClientMockResponse(method, url, json={"data": {"opt_in": data["opt_in"], "status": "none"}})
+
         for ref in ("AB12CD", "ZZ99ZZ", "CC33CC", "S1", "S2", "S3"):
             self.mock.patch(API + f"/bookings/id-{ref}/access-code", side_effect=patched)
+            self.mock.patch(API + f"/bookings/id-{ref}/recording", side_effect=recording)
+            self.mock.put(API + f"/bookings/id-{ref}/recording/opt-in", side_effect=opt_in)
         self.mock.get(API + "/health", json={"data": {"status": "ok", "apiVersion": 1, "settings": {}}})
         if self.down:
             self.mock.get(API + "/bookings", exc=aiohttp.ClientConnectionError("down"))
