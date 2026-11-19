@@ -89,6 +89,8 @@ def test_index_page_lists_files_and_escapes():
     page = rec.render_index("AB12CD", "pl", files, links, "https://s/links.txt?x=1", "10.06.2030 12:11")
     assert "Nagrania z sesji AB12CD" in page and "2.5 GB" in page and "konsola (ISO)" in page and "10.06.2030 12:11" in page
     assert "&amp;b=&lt;1&gt;" in page and "<1>" not in page
+    assert '<div id="allbox" hidden>' in page and "Pobierz wszystko (2.5 GB)" in page and 'data-f="CAM1_A.MP4"' in page
+    assert "showDirectoryPicker" in page and "{{" not in page and "&quot;doing&quot;: &quot;Pobieranie&quot;" in page
     assert "Session recordings" in rec.render_index("AB12CD", "en", files, links, "https://s/l", "x")
 
 
@@ -261,6 +263,8 @@ async def test_opted_in_session_is_uploaded_reported_and_deleted_after_a_week(ha
     await minutes(hass, freezer, 30)
     await take(hass, freezer)
     assert manager.journal[0]["booking_id"] == "id-AB12CD" and manager.journal[0]["stop"] is not None
+    shown = next(s for s in hass.states.async_all("sensor") if "takes" in s.attributes).attributes
+    assert shown["open_take"] is False and shown["takes"] == [{"start": "2030-06-03T08:30:00+00:00", "stop": "2030-06-03T08:40:00+00:00", "seconds": 600, "ref": "AB12CD"}]
     session_files(bridges)
 
     await minutes(hass, freezer, 85)  # 10:05, the code window is still open

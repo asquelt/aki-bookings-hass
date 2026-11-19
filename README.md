@@ -73,6 +73,7 @@ One device, "Rezerwacje studia":
 | Last sync (sensor) | timestamp of the last good feed | `result`, `bookings_count`, `error_message`, `consecutive_failures`, `pending_reports` |
 | Problem (binary sensor) | on when something needs attention | `reasons` (`code_failed`, `auth_failed`, `sync_stale`), `failed_codes`, `sync_error`, `lock_error` |
 | Calendar | on during a session | one event per confirmed booking |
+| Recordings (sensor) | sessions that still need something | see [Recordings](#recordings) |
 
 `code_status` is one of `none`, `scheduled`, `pending`, `applied`, `failed`, `revoked`, `removed`.
 Booking attributes are excluded from the recorder. The PIN is never in a state, an attribute, an
@@ -128,10 +129,22 @@ What happens, by itself:
 4. **Interruption.** A camera upload is cancelled 18 minutes before the next code window, and at
    once when recording mode comes on or a code window opens. It resumes when the conditions return.
 5. **When everything is in the bucket** the sizes are checked against the sources, `index.html`
-   (one signed link per file) and `links.txt` are written, and the signed link to the page is
+   (one signed link per file, plus a "Download all" button: Chromium browsers save every file into a
+   folder the client picks, others download them one by one) and `links.txt` are written, and the signed link to the page is
    reported as `ready` with its expiry. The link is never in a state, an attribute, an event or a log.
 6. **After the download time** (1–7 days, default 7) the booking's folder is deleted from the bucket.
 7. **Three nights without progress** report `failed`; the upload then waits for the operator.
+
+What the booking system refuses is final for the day, and the cards are not listed again until tomorrow:
+
+- `409 recording_delivered` (a link was already delivered; only a new `ready` may follow): the
+  session is closed, nothing is sent.
+- `409 recording_not_opted_in` (the client withdrew the choice since the last feed): nothing is sent.
+- `404`: the booking was cancelled before its start; the session is closed.
+
+A booking cancelled **after** its session began is handled like any other. The feed carries no
+cancellation time, so "began" means: the booking was already in the register, or the journal has a
+take of it, or its `updated_at` is later than its start.
 
 The register behind this holds no client data: booking id, ref, times, the choice, file names.
 
@@ -143,8 +156,11 @@ The register behind this holds no client data: booking id, ref, times, the choic
 | Folder in the bucket | `nagrania` | Each booking gets `<folder>/<ref>-<random>` |
 | Days to download | 7 | Signed links cannot live longer |
 
-The Recordings sensor counts sessions that still need something; its attributes list them with
-state (`waiting`, `uploading`, `ready`, `failed`, `left`), files sent and the active phase.
+The Recordings sensor counts sessions that still need something. Its attributes: `sessions` (each
+with state `waiting`, `uploading`, `ready`, `failed` or `left`, files, files sent, bytes, expiry),
+`active` and `phase` (the upload running now), `takes` (the last 50 takes of the journal; a take is one on/off of recording mode, not a file: `start`,
+`stop`, `seconds`, booking `ref`), `open_take` (recording mode is on now), `enabled`, `last_error`.
+The whole journal and register are in the downloadable diagnostics.
 
 More events: `aki_bookings_recordings_ready`, `_failed`, `_empty`, `_left`, `_none`,
 `_unassigned` (files outside any booking), `_deleted`.

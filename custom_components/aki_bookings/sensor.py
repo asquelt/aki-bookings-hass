@@ -138,5 +138,6 @@ class RecordingsSensor(AkiEntity, SensorEntity):
             "phase": active.get("phase") if active else None,
             "sessions": manager.overview(),
             "open_take": bool(manager.journal and manager.journal[-1].get("stop") is None),
+            "takes": manager.takes_view(),
             "last_error": manager.last_error,
         }

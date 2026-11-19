@@ -6,6 +6,7 @@ Nothing here holds client data: a register entry is id, ref, times, the opt-in a
 from __future__ import annotations
 
 import html
+import json
 import re
 from datetime import datetime, timedelta, timezone
 
@@ -206,10 +207,46 @@ def human_size(n: int) -> str:
 
 TEXT = {
     "pl": {"title": "Nagrania z sesji", "file": "Plik", "source": "Źródło", "size": "Rozmiar", "camera": "kamera", "console": "konsola (ISO)",
-           "until": "Linki działają do", "after": "Po tym terminie pliki są usuwane.", "list": "Lista linków dla menedżera pobierania", "total": "Razem"},
+           "until": "Linki działają do", "after": "Po tym terminie pliki są usuwane.", "list": "Lista linków dla menedżera pobierania", "total": "Razem",
+           "all": "Pobierz wszystko", "all_hint": "Chrome i Edge zapiszą pliki do wybranego folderu, inne przeglądarki pobiorą je po kolei.",
+           "doing": "Pobieranie", "done": "Pobrano wszystkie pliki.", "failed": "Pobieranie przerwane:",
+           "started": "Przeglądarka pobiera pliki. Może zapytać o zgodę na pobranie wielu plików."},
     "en": {"title": "Session recordings", "file": "File", "source": "Source", "size": "Size", "camera": "camera", "console": "console (ISO)",
-           "until": "The links work until", "after": "After that the files are deleted.", "list": "Link list for a download manager", "total": "Total"},
+           "until": "The links work until", "after": "After that the files are deleted.", "list": "Link list for a download manager", "total": "Total",
+           "all": "Download all", "all_hint": "Chrome and Edge save the files into a folder you choose, other browsers download them one by one.",
+           "doing": "Downloading", "done": "All files downloaded.", "failed": "Download stopped:",
+           "started": "The browser is downloading the files. It may ask to allow multiple downloads."},
 }
+
+
+# "Download all" needs no server: the page and the files share one origin (the bucket endpoint), so the
+# script may fetch them. With the File System Access API (Chromium) the files stream straight into a folder
+# the client picks, one after another; elsewhere the links are clicked in turn. Without scripts the
+# button stays hidden and the page works as a plain list.
+ALL_SCRIPT = """(function(){
+var b=document.getElementById('all'),s=document.getElementById('st'),L=[].slice.call(document.querySelectorAll('a[data-f]'));
+if(!b||!L.length)return;
+var T=JSON.parse(b.getAttribute('data-t'));document.getElementById('allbox').hidden=false;
+function say(x){s.textContent=x}
+function wait(ms){return new Promise(function(r){setTimeout(r,ms)})}
+b.onclick=async function(){
+b.disabled=true;
+try{
+if(window.showDirectoryPicker){
+var dir;try{dir=await window.showDirectoryPicker({mode:'readwrite'})}catch(e){return}
+for(var i=0;i<L.length;i++){
+var n=L[i].getAttribute('data-f');say(T.doing+' '+(i+1)+'/'+L.length+': '+n);
+var r=await fetch(L[i].href);if(!r.ok)throw new Error(n+': HTTP '+r.status);
+var h=await dir.getFileHandle(n,{create:true});await r.body.pipeTo(await h.createWritable());
+}
+say(T.done);
+}else{
+for(var j=0;j<L.length;j++){say(T.doing+' '+(j+1)+'/'+L.length+': '+L[j].getAttribute('data-f'));L[j].click();await wait(1500)}
+say(T.started);
+}
+}catch(e){say(T.failed+' '+e.message)}finally{b.disabled=false}
+};
+})();"""
 
 
 def render_index(ref: str, locale: str, files: list[dict], links: dict[str, str], list_url: str, expires_text: str) -> str:
@@ -219,10 +256,11 @@ def render_index(ref: str, locale: str, files: list[dict], links: dict[str, str]
     for f in sorted(files, key=lambda f: (f["source"] == CONSOLE, f["source"], f["ts"], f["dest"])):
         source = t["console"] if f["source"] == CONSOLE else f"{t['camera']} {html.escape(f['source'])}"
         rows.append(
-            f'<tr><td><a href="{html.escape(links[f["dest"]], quote=True)}" download>{html.escape(f["dest"])}</a></td>'
+            f'<tr><td><a href="{html.escape(links[f["dest"]], quote=True)}" download data-f="{html.escape(f["dest"], quote=True)}">{html.escape(f["dest"])}</a></td>'
             f"<td>{source}</td><td class=n>{human_size(f['size'])}</td></tr>"
         )
     total = human_size(sum(f["size"] for f in files))
+    script_texts = html.escape(json.dumps({k: t[k] for k in ("doing", "done", "failed", "started")}, ensure_ascii=False), quote=True)
     return f"""<!doctype html>
 <html lang="{'en' if locale == 'en' else 'pl'}"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex, nofollow">
@@ -233,14 +271,18 @@ main{{max-width:760px;margin:0 auto}}h1{{font-size:1.4rem;margin:0 0 4px}}p{{mar
 table{{width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden}}
 th,td{{text-align:left;padding:10px 12px;border-bottom:1px solid #e6e6e0;word-break:break-all}}th{{font-size:.85rem;color:#55554f}}
 .n{{text-align:right;white-space:nowrap;word-break:normal}}a{{color:#0b57d0}}tfoot td{{font-weight:600;border-bottom:0}}
-@media (prefers-color-scheme:dark){{body{{background:#161615;color:#ecece6}}table{{background:#222220}}th,td{{border-color:#33332f}}p,th{{color:#a8a8a0}}a{{color:#8ab4f8}}}}
+@media (prefers-color-scheme:dark){{body{{background:#161615;color:#ecece6}}table{{background:#222220}}th,td{{border-color:#33332f}}p,th{{color:#a8a8a0}}a{{color:#8ab4f8}}button{{background:#8ab4f8;color:#161615}}}}
+button{{font:inherit;font-weight:600;padding:10px 18px;border:0;border-radius:8px;background:#0b57d0;color:#fff;cursor:pointer}}
+button:disabled{{opacity:.6;cursor:default}}#allbox{{margin:0 0 16px}}#st{{margin:8px 0 0}}
 </style></head><body><main>
 <h1>{t['title']} {html.escape(ref)}</h1>
 <p>{t['until']} {html.escape(expires_text)}. {t['after']}</p>
+<div id="allbox" hidden><button id="all" type="button" data-t="{script_texts}">{t['all']} ({total})</button>
+<p id="st" aria-live="polite">{t['all_hint']}</p></div>
 <table><thead><tr><th>{t['file']}</th><th>{t['source']}</th><th class=n>{t['size']}</th></tr></thead>
 <tbody>
 {chr(10).join(rows)}
 </tbody><tfoot><tr><td>{t['total']}</td><td></td><td class=n>{total}</td></tr></tfoot></table>
 <p style="margin-top:16px"><a href="{html.escape(list_url, quote=True)}">{t['list']}</a></p>
-</main></body></html>
+</main><script>{ALL_SCRIPT}</script></body></html>
 """

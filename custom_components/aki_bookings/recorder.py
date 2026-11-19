@@ -147,12 +147,27 @@ class RecordingManager:
             return
         self.journal = rec.prune_journal(self.journal, now)
         self.entry.async_create_background_task(self.hass, self._save(), f"{DOMAIN} journal")
+        self.coordinator.async_update_listeners()  # the sensor's open_take follows at once
 
     # ---- views --------------------------------------------------------------------------------
 
     @property
     def active(self) -> dict | None:
         return next((e for e in self.register.values() if e.get("phase")), None)
+
+    def takes_view(self, count: int = 50) -> list[dict]:
+        """The latest takes for the sensor: when recording mode was on, and for which booking."""
+        refs = {b.id: b.ref for b in self.coordinator.bookings} | {e["id"]: e["ref"] for e in self.register.values()}
+        out = []
+        for t in self.journal[-count:]:
+            stop = t.get("stop")
+            out.append({
+                "start": dt_util.utc_from_timestamp(t["start"]).isoformat(timespec="seconds"),
+                "stop": dt_util.utc_from_timestamp(stop).isoformat(timespec="seconds") if stop else None,
+                "seconds": round(stop - t["start"]) if stop else None,
+                "ref": refs.get(t.get("booking_id")),
+            })
+        return out
 
     def overview(self) -> list[dict]:
         out = []
@@ -411,7 +426,7 @@ class RecordingManager:
             if f is None:
                 continue
             if jf.get("state") in ("uploaded", "skipped"):
-                f["state"] = rec.F_SENT
+                f["state"], f["error"] = rec.F_SENT, None  # an earlier attempt's error no longer applies
             elif jf.get("state") in ("failed", "missing"):
                 f["state"], f["error"] = rec.F_FAILED, jf.get("error")
         return job.get("state") not in FINISHED
