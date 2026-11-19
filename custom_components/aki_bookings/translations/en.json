@@ -70,7 +70,8 @@
           "s3_access_key": "Access key ID",
           "s3_secret_key": "Secret access key",
           "s3_root": "Folder in the bucket",
-          "download_days": "Days to download"
+          "download_days": "Days to download",
+          "delete_sources": "Delete from the cards and the console disk after upload"
         },
         "data_description": {
           "guard_entity": "On while a take is being recorded. Its changes make the take journal; uploads never run while it is on.",
@@ -78,7 +79,8 @@
           "s3_access_key": "Leave empty to keep the stored key",
           "s3_secret_key": "Leave empty to keep the stored key",
           "s3_root": "Each booking gets its own subfolder with a random part",
-          "download_days": "After that the files are deleted from the bucket. Signed links cannot live longer than 7 days."
+          "download_days": "After that the files are deleted from the bucket. Signed links cannot live longer than 7 days.",
+          "delete_sources": "Once every file of a session is in the bucket with the right size and the link is reported, its files are removed from the camera cards and the console disk. Only those files; nothing is formatted."
         }
       }
     },
@@ -116,6 +118,11 @@
     "calendar": {
       "bookings": {
         "name": "Bookings"
+      }
+    },
+    "switch": {
+      "recording_opt_in": {
+        "name": "Recording opt-in"
       }
     }
   },
@@ -188,7 +195,7 @@
         },
         "action": {
           "name": "Decision",
-          "description": "upload: opt in on the client's behalf and send them next night; keep: ask again tomorrow; delete: not available yet."
+          "description": "upload: opt in on the client's behalf and send them next night; keep: ask again tomorrow; delete: remove the session's files from the cards and the console disk as soon as nobody is in."
         }
       }
     },

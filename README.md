@@ -74,6 +74,7 @@ One device, "Rezerwacje studia":
 | Problem (binary sensor) | on when something needs attention | `reasons` (`code_failed`, `auth_failed`, `sync_stale`), `failed_codes`, `sync_error`, `lock_error` |
 | Calendar | on during a session | one event per confirmed booking |
 | Recordings (sensor) | sessions that still need something | see [Recordings](#recordings) |
+| Recording opt-in (switch) | the choice of the booking whose code window is open; unavailable otherwise | `id`, `ref`, `recording_status`. Made for the studio kiosk: turning it writes the choice to the booking system, which refuses once the upload has started |
 
 `code_status` is one of `none`, `scheduled`, `pending`, `applied`, `failed`, `revoked`, `removed`.
 Booking attributes are excluded from the recorder. The PIN is never in a state, an attribute, an
@@ -155,6 +156,7 @@ The register behind this holds no client data: booking id, ref, times, the choic
 | Storage endpoint, bucket, keys | | Read, write and delete rights on the bucket the bridges upload to |
 | Folder in the bucket | `nagrania` | Each booking gets `<folder>/<ref>-<random>` |
 | Days to download | 7 | Signed links cannot live longer |
+| Delete from the cards and the console disk after upload | off | See below |
 
 The Recordings sensor counts sessions that still need something. Its attributes: `sessions` (each
 with state `waiting`, `uploading`, `ready`, `failed` or `left`, files, files sent, bytes, expiry),
@@ -163,14 +165,21 @@ with state `waiting`, `uploading`, `ready`, `failed` or `left`, files, files sen
 The whole journal and register are in the downloadable diagnostics.
 
 More events: `aki_bookings_recordings_ready`, `_failed`, `_empty`, `_left`, `_none`,
-`_unassigned` (files outside any booking), `_deleted`.
+`_unassigned` (files outside any booking), `_deleted` (the cloud copy, at expiry),
+`_sources_deleted` (`files`, `bytes`, `by`: `upload` or `operator`) and `_sources_failed` (`left`, `errors`).
 
 More actions: `aki_bookings.resolve_recordings` (`booking_id`, `action`: `upload` opts in on the
-client's behalf, `keep` asks again tomorrow) and `aki_bookings.run_recordings` (one pass now; every
+client's behalf, `keep` asks again tomorrow, `delete` removes the session's files from the sources) and `aki_bookings.run_recordings` (one pass now; every
 safety condition still applies).
 
-Not here yet: deleting files from the camera cards and the console disk (the bridges cannot do it),
-so `resolve_recordings` with `delete` is refused and uploaded files stay on the sources.
+**Cleaning the sources** (needs a74_bridge ≥ 0.7.0 and bridges ≥ 0.5.0). A session's files are removed
+from the camera cards and the console disk in two cases: after its upload was verified and reported
+(`ready`), when the option is on; and when the operator answers `delete` for recordings left without
+opt-in or after a failed upload. Only that session's files are named, each with its size; the bridge
+deletes a file only when name and size both match and lists the source again to confirm. A card delete
+takes the camera out of remote control for a few seconds, so it waits for the same conditions as an
+upload. Up to three tries a day; what could not be removed is reported once a day and tried again
+the next day. Files that belong to no booking are never deleted. Nothing is ever formatted.
 
 ## Development
 

@@ -24,6 +24,10 @@ ST_UPLOADING = "uploading"  # opt-in, files assigned, upload in progress or pend
 ST_READY = "ready"  # link reported; the prefix is deleted at expires_at
 ST_FAILED = "failed"  # reported failed; waits for the operator
 ST_LEFT = "left"  # no opt-in, files still on the sources; waits for the operator
+SRC_DELETED = "deleted"  # per file: gone from the card or the console disk
+SRC_FAILED = "failed"
+CLEAN_PENDING = "pending"  # per session: its files are to be removed from the sources
+CLEAN_DONE = "done"
 ST_DONE = "done"  # nothing more to do (empty, nothing recorded, expired, cancelled)
 
 F_PENDING, F_SENT, F_FAILED = "pending", "sent", "failed"

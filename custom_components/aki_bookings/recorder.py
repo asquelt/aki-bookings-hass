@@ -36,6 +36,9 @@ from .const import (
     EVENT_REC_NONE,
     EVENT_REC_READY,
     EVENT_REC_UNASSIGNED,
+    EVENT_SRC_DELETED,
+    EVENT_SRC_FAILED,
+    OPT_DELETE_SOURCES,
     OPT_DOWNLOAD_DAYS,
     OPT_GUARD,
     OPT_REC_ENABLED,
@@ -98,6 +101,10 @@ class RecordingManager:
     @property
     def download_days(self) -> int:
         return max(1, min(7, int(self._opt(OPT_DOWNLOAD_DAYS, DEFAULT_DOWNLOAD_DAYS))))
+
+    @property
+    def delete_sources(self) -> bool:
+        return bool(self._opt(OPT_DELETE_SOURCES, False))
 
     def _s3(self) -> S3:
         missing = [k for k in (OPT_S3_ENDPOINT, OPT_S3_BUCKET, OPT_S3_KEY, OPT_S3_SECRET) if not self._opt(k)]
@@ -172,7 +179,7 @@ class RecordingManager:
     def overview(self) -> list[dict]:
         out = []
         for e in sorted(self.register.values(), key=lambda e: e["end"]):
-            if e["state"] == rec.ST_DONE:
+            if e["state"] == rec.ST_DONE and e.get("cleanup") != rec.CLEAN_PENDING:
                 continue
             files = e.get("files") or []
             out.append({
@@ -181,6 +188,8 @@ class RecordingManager:
                 "bytes": sum(f.get("size", 0) for f in files),
                 "expires_at": dt_util.utc_from_timestamp(e["expires_at"]).isoformat() if e.get("expires_at") else None,
                 "error": e.get("error"),
+                "cleanup": e.get("cleanup"),
+                "on_sources": sum(1 for f in files if f.get("src") != rec.SRC_DELETED),
             })
         return out
 
@@ -249,6 +258,8 @@ class RecordingManager:
             entry["opt_in"], entry["remote"] = b.recording_opt_in, b.recording_status
         limit = (now - KEEP_DONE).timestamp()
         for key, entry in list(self.register.items()):
+            if entry.get("cleanup") == rec.CLEAN_PENDING:
+                continue  # its files are still to be removed from the sources
             if entry["state"] == rec.ST_DONE and entry["end"] < limit:
                 del self.register[key]
             elif key not in seen and entry["state"] in (rec.ST_WAITING, rec.ST_LEFT):
@@ -264,12 +275,21 @@ class RecordingManager:
         console_ok = rec.console_upload_allowed(bookings, now, guard)
         today = self._today(now)
 
-        if cameras_ok and any(
-            e["state"] in (rec.ST_WAITING, rec.ST_LEFT, rec.ST_UPLOADING) and e.get("inspected_on") != today for e in self.register.values()
-        ):
+        if cameras_ok and any(self._inspectable(e) and e.get("inspected_on") != today for e in self.register.values()):
             if await self._refresh_register(now, force=True):  # the freshest opt-in, right before deciding
                 await self._inspect(now, today)
             return  # the cameras need a few seconds to return to Remote mode after a listing
+
+        for e in sorted(self.register.values(), key=lambda e: e["end"]):
+            if e.get("cleanup") != rec.CLEAN_PENDING:
+                continue
+            tries = e.setdefault("tries", {})
+            cams = cameras_ok and any(f["source"] != rec.CONSOLE and f.get("src") != rec.SRC_DELETED for f in e["files"])
+            cons = console_ok and any(f["source"] == rec.CONSOLE and f.get("src") != rec.SRC_DELETED for f in e["files"])
+            if (cams or cons) and tries.get(f"{today}-del", 0) < ATTEMPTS_PER_NIGHT:
+                tries[f"{today}-del"] = tries.get(f"{today}-del", 0) + 1
+                await self._cleanup(e, cams, cons, last=tries[f"{today}-del"] >= ATTEMPTS_PER_NIGHT)
+                return  # the cameras need a few seconds to return to Remote mode
 
         for e in sorted(self.register.values(), key=lambda e: e["end"]):
             if e["state"] != rec.ST_UPLOADING:
@@ -304,6 +324,11 @@ class RecordingManager:
                 return device.id
         return None
 
+    @staticmethod
+    def _inspectable(e: dict) -> bool:
+        """Sessions the daily look at the sources still has to sort out. One waiting for its files to be deleted is settled."""
+        return e["state"] in (rec.ST_WAITING, rec.ST_LEFT, rec.ST_UPLOADING) and e.get("cleanup") != rec.CLEAN_PENDING
+
     async def _inspect(self, now: datetime, today: str) -> None:
         """List the cards and the console disk once and sort out every finished session."""
         complete = True
@@ -328,7 +353,7 @@ class RecordingManager:
         if complete:
             self.last_error = None
 
-        candidates = [e for e in self.register.values() if e["state"] in (rec.ST_WAITING, rec.ST_LEFT, rec.ST_UPLOADING)]
+        candidates = [e for e in self.register.values() if self._inspectable(e)]
         assigned, unassigned = rec.assign_files(files, candidates, self.journal)
         for e in candidates:
             mine = assigned[e["id"]]
@@ -509,7 +534,62 @@ class RecordingManager:
             return
         if await self._report(e, "ready", url=url, expires_at=iso(expires)):
             e["state"], e["expires_at"], e["error"] = rec.ST_READY, expires.timestamp(), None
+            if self.delete_sources:  # every size was just checked against the bucket: the copy there is complete
+                e["cleanup"], e["cleanup_by"] = rec.CLEAN_PENDING, "upload"
             self._fire(EVENT_REC_READY, e, files=len(e["files"]), bytes=sum(f["size"] for f in e["files"]), expires_at=iso(expires))
+
+    async def _cleanup(self, e: dict, cameras: bool, console: bool, last: bool) -> None:
+        """Remove a session's files from the sources: exactly these names and sizes, checked by the bridge afterwards."""
+        def apply(files: list[dict], key: str, answer: dict) -> None:
+            by_key = {f[key]: f for f in files}
+            for jf in answer.get("files") or []:
+                f = by_key.get(jf.get(key))
+                if f is None:
+                    continue
+                if jf.get("state") in ("deleted", "missing"):  # missing: somebody removed it already
+                    f["src"], f["src_error"] = rec.SRC_DELETED, None
+                else:
+                    f["src"], f["src_error"] = rec.SRC_FAILED, jf.get("error") or jf.get("state")
+
+        todo = [f for f in e["files"] if f.get("src") != rec.SRC_DELETED]
+        if cameras:
+            by_camera: dict[str, list[dict]] = {}
+            for f in todo:
+                if f["source"] != rec.CONSOLE:
+                    by_camera.setdefault(f["source"], []).append(f)
+            for camera_id, files in by_camera.items():
+                device = self._device_for(camera_id)
+                if device is None:
+                    self.last_error = f"no a74_bridge device named {camera_id}"
+                    continue
+                answer = await self._bridge("media_delete", {"device_id": device, "files": [{"name": f["name"], "size": f["size"]} for f in files]})
+                result = answer.get(camera_id, answer)
+                if not isinstance(result, dict) or "error" in result:
+                    self.last_error = f"delete on {camera_id}: {result.get('error') if isinstance(result, dict) else result}"
+                else:
+                    apply(files, "name", result)
+        if console:
+            files = [f for f in todo if f["source"] == rec.CONSOLE]
+            if files:
+                answer = await self._bridge("console_media_delete", {"files": [{"path": f["path"], "size": f["size"]} for f in files]})
+                if "error" in answer:
+                    self.last_error = f"delete on the console: {answer['error']}"
+                else:
+                    apply(files, "path", answer)
+        left = [f for f in e["files"] if f.get("src") != rec.SRC_DELETED]
+        if not left:
+            e["cleanup"] = rec.CLEAN_DONE
+            if e.get("cleanup_by") == "operator":
+                if e.get("prefix") and e["state"] == rec.ST_FAILED:
+                    try:  # a failed upload may have left parts of the session in the bucket
+                        await self._s3().delete_prefix(e["prefix"] + "/")
+                    except S3Error as err:
+                        self.last_error = str(err)
+                e["state"] = rec.ST_DONE
+            self._fire(EVENT_SRC_DELETED, e, files=len(e["files"]), bytes=sum(f["size"] for f in e["files"]), by=e.get("cleanup_by"))
+        elif last:  # once a day; the next night tries again
+            errors = sorted({f"{f['dest']}: {f['src_error']}" for f in left if f.get("src_error")})
+            self._fire(EVENT_SRC_FAILED, e, left=len(left), errors=errors[:5], last_error=self.last_error)
 
     async def _expire(self, now: datetime) -> None:
         for e in self.register.values():
@@ -530,7 +610,10 @@ class RecordingManager:
             if e is None or e["state"] not in (rec.ST_LEFT, rec.ST_FAILED):
                 raise HomeAssistantError(f"No booking {booking_id} is waiting for a decision about its recordings")
             if action == "delete":
-                raise HomeAssistantError("Deleting from the cards and the console disk is not available yet; remove the files by hand")
+                if not e.get("files"):
+                    raise HomeAssistantError(f"Booking {e['ref']} has no files listed on the sources")
+                # Done by the loop as soon as nobody is in: a card delete takes the camera out of Remote mode.
+                e.update(cleanup=rec.CLEAN_PENDING, cleanup_by="operator", tries={})
             if action == "upload":
                 try:
                     await self.coordinator.api.set_recording_opt_in(e["id"], True)

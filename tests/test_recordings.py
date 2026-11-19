@@ -142,11 +142,13 @@ class FakeBridges:
         self.console_job: dict = {}
         self.calls: list[str] = []
         self.hang = False  # jobs never finish
+        self.undeletable: set[str] = set()
         owner = MockConfigEntry(domain="a74_bridge")
         owner.add_to_hass(hass)
         self.device = dr.async_get(hass).async_get_or_create(config_entry_id=owner.entry_id, identifiers={("a74_bridge", "SER1")}, name="CAM1")
         reg = hass.services.async_register
-        for name in ("media_list", "media_upload", "media_job", "media_cancel", "console_media_list", "console_media_upload", "console_media_job", "console_media_cancel"):
+        for name in ("media_list", "media_upload", "media_job", "media_cancel", "console_media_list", "console_media_upload", "console_media_job", "console_media_cancel",
+                     "media_delete", "console_media_delete"):
             reg("a74_bridge", name, getattr(self, "_" + name), supports_response=SupportsResponse.OPTIONAL)
 
     def _guard(self, call: ServiceCall) -> None:
@@ -186,6 +188,28 @@ class FakeBridges:
         for job in self.jobs.values():
             job["state"] = "cancelled"
         return {}
+
+    def _delete(self, files, have: list[dict], key: str) -> dict:
+        out = []
+        for f in files:
+            hit = next((x for x in have if x[key] == f[key]), None)
+            if hit is None:
+                out.append({**f, "state": "missing"})
+            elif hit["size"] != f["size"] or f[key] in self.undeletable:
+                out.append({**f, "state": "failed", "error": "refused"})
+            else:
+                have.remove(hit)
+                out.append({**f, "state": "deleted"})
+        return {"files": out}
+
+    async def _media_delete(self, call):
+        self._guard(call)
+        assert call.data["device_id"] == self.device.id
+        return {"CAM1": self._delete(call.data["files"], self.cards["CAM1"], "name")}
+
+    async def _console_media_delete(self, call):
+        self._guard(call)
+        return self._delete(call.data["files"], self.console, "path")
 
     async def _console_media_list(self, call):
         self.calls.append(call.service)
@@ -303,8 +327,6 @@ async def test_without_opt_in_nothing_is_uploaded_and_the_operator_is_told(hass,
     assert left[0].data["ref"] == "AB12CD" and left[0].data["sources"] == {"CAM1": {"count": 2, "bytes": 130}, "console": {"count": 1, "bytes": 50}}
     assert len(left) == 1  # once a day, not every minute
 
-    with pytest.raises(HomeAssistantError):
-        await hass.services.async_call(DOMAIN, "resolve_recordings", {"booking_id": "AB12CD", "action": "delete"}, blocking=True)
     feed.set([booking(recording={"opt_in": True, "status": "none"})])
     await hass.services.async_call(DOMAIN, "resolve_recordings", {"booking_id": "AB12CD", "action": "upload"}, blocking=True)
     assert feed.opt_ins == [("AB12CD", True)]
@@ -366,6 +388,71 @@ async def test_booking_cancelled_before_its_start_is_ignored(hass, entry, lock, 
     session_files(bridges)
     await minutes(hass, freezer, 140)
     assert manager.find("AB12CD") is None and feed.recording_reports == [] and "media_upload" not in bridges.calls
+
+
+async def test_sources_are_cleaned_after_a_verified_upload_when_asked(hass, entry, lock, feed, bridges, store, freezer):
+    feed.set([booking(recording={"opt_in": True, "status": "none"})])
+    gone = async_capture_events(hass, f"{DOMAIN}_recordings_sources_deleted")
+    failed = async_capture_events(hass, f"{DOMAIN}_recordings_sources_failed")
+    manager = await start(hass, entry, {**OPTIONS, "delete_sources": True})
+    await minutes(hass, freezer, 30)
+    await take(hass, freezer)
+    session_files(bridges)
+    bridges.undeletable = {"C0003.MP4"}
+    await minutes(hass, freezer, 110)
+    e = manager.find("AB12CD")
+    assert e["state"] == "ready" and e["cleanup"] == "pending"
+    assert [f["name"] for f in bridges.cards["CAM1"]] == ["C0002.MP4", "C0003.MP4"]  # the other client's file is never touched
+    assert bridges.console == [] and bridges.calls.count("media_delete") == 3  # three tries, then tomorrow
+    assert len(failed) == 1 and failed[0].data["left"] == 1 and gone == []
+    assert store.objects  # the cloud copy is untouched
+
+    bridges.undeletable = set()
+    freezer.tick(timedelta(days=1))
+    await minutes(hass, freezer, 3)
+    assert [f["name"] for f in bridges.cards["CAM1"]] == ["C0002.MP4"]
+    assert e["cleanup"] == "done" and e["state"] == "ready" and gone[0].data["files"] == 3 and gone[0].data["by"] == "upload"
+
+
+async def test_without_the_option_the_sources_are_left_alone(hass, entry, lock, feed, bridges, store, freezer):
+    feed.set([booking(recording={"opt_in": True, "status": "none"})])
+    manager = await start(hass, entry)
+    await minutes(hass, freezer, 30)
+    await take(hass, freezer)
+    session_files(bridges)
+    await minutes(hass, freezer, 110)
+    assert manager.find("AB12CD")["state"] == "ready" and "media_delete" not in bridges.calls and len(bridges.cards["CAM1"]) == 3
+
+
+async def test_operator_deletes_recordings_left_without_opt_in(hass, entry, lock, feed, bridges, store, freezer):
+    feed.set([booking()])
+    gone = async_capture_events(hass, f"{DOMAIN}_recordings_sources_deleted")
+    left = async_capture_events(hass, f"{DOMAIN}_recordings_left")
+    manager = await start(hass, entry)
+    await minutes(hass, freezer, 30)
+    await take(hass, freezer)
+    session_files(bridges)
+    await minutes(hass, freezer, 100)
+    assert manager.find("AB12CD")["state"] == "left"
+    await hass.services.async_call(DOMAIN, "resolve_recordings", {"booking_id": "AB12CD", "action": "delete"}, blocking=True)
+    await minutes(hass, freezer, 3)
+    assert [f["name"] for f in bridges.cards["CAM1"]] == ["C0002.MP4"] and bridges.console == []
+    assert manager.find("AB12CD")["state"] == "done" and gone[0].data["by"] == "operator" and feed.recording_reports == [] and store.objects == {}
+    freezer.tick(timedelta(days=1))
+    await minutes(hass, freezer, 5)
+    assert len(left) == 1  # settled: no more signals
+
+
+async def test_kiosk_switch_sets_the_choice_only_while_a_client_is_in(hass, entry, lock, feed, bridges, store, freezer):
+    feed.set([booking()])
+    await start(hass, entry)
+    switch = next(s.entity_id for s in hass.states.async_all("switch"))
+    assert hass.states.get(switch).state == "off" and hass.states.get(switch).attributes["ref"] == "AB12CD"
+    feed.set([booking(recording={"opt_in": True, "status": "none"})])
+    await hass.services.async_call("switch", "turn_on", {"entity_id": switch}, blocking=True)
+    assert feed.opt_ins == [("AB12CD", True)] and hass.states.get(switch).state == "on"
+    await minutes(hass, freezer, 140)  # the code window is over
+    assert hass.states.get(switch).state == "unavailable"
 
 
 async def test_recording_mode_interrupts_a_camera_upload_and_it_resumes(hass, entry, lock, feed, bridges, store, freezer):

@@ -27,7 +27,7 @@ from .const import (
 from .coordinator import BookingCoordinator
 from .recorder import RecordingManager
 
-PLATFORMS = [Platform.BINARY_SENSOR, Platform.CALENDAR, Platform.SENSOR]
+PLATFORMS = [Platform.BINARY_SENSOR, Platform.CALENDAR, Platform.SENSOR, Platform.SWITCH]
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 type AkiConfigEntry = ConfigEntry[BookingCoordinator]

@@ -25,6 +25,7 @@ from .const import (
     DEFAULT_SLOT_LIMIT,
     DEFAULT_URL,
     DOMAIN,
+    OPT_DELETE_SOURCES,
     OPT_DOWNLOAD_DAYS,
     OPT_DRY_RUN,
     OPT_DRY_RUN_REPORT,
@@ -177,5 +178,6 @@ class AkiBookingsOptionsFlow(OptionsFlow):
             vol.Required(OPT_DOWNLOAD_DAYS, default=options.get(OPT_DOWNLOAD_DAYS, DEFAULT_DOWNLOAD_DAYS)): selector.NumberSelector(
                 selector.NumberSelectorConfig(min=1, max=7, step=1, mode=selector.NumberSelectorMode.BOX)
             ),
+            vol.Required(OPT_DELETE_SOURCES, default=options.get(OPT_DELETE_SOURCES, False)): selector.BooleanSelector(),
         })
         return self.async_show_form(step_id="recordings", data_schema=schema, errors=errors)

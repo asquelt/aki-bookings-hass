@@ -21,6 +21,7 @@ OPT_S3_KEY = "s3_access_key"
 OPT_S3_SECRET = "s3_secret_key"
 OPT_S3_ROOT = "s3_root"
 OPT_DOWNLOAD_DAYS = "download_days"
+OPT_DELETE_SOURCES = "delete_sources"  # after a verified upload, remove the files from the cards and the console disk
 
 DEFAULT_URL = "https://pero.ro"
 DEFAULT_SCAN_INTERVAL = 300  # s
@@ -49,6 +50,8 @@ EVENT_REC_LEFT = f"{DOMAIN}_recordings_left"
 EVENT_REC_NONE = f"{DOMAIN}_recordings_none"
 EVENT_REC_UNASSIGNED = f"{DOMAIN}_recordings_unassigned"
 EVENT_REC_DELETED = f"{DOMAIN}_recordings_deleted"
+EVENT_SRC_DELETED = f"{DOMAIN}_recordings_sources_deleted"
+EVENT_SRC_FAILED = f"{DOMAIN}_recordings_sources_failed"
 
 SERVICE_SYNC_NOW = "sync_now"
 SERVICE_RECONCILE_LOCK = "reconcile_lock"

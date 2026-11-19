@@ -70,7 +70,8 @@
           "s3_access_key": "Access key ID",
           "s3_secret_key": "Secret access key",
           "s3_root": "Katalog w buckecie",
-          "download_days": "Dni na pobranie"
+          "download_days": "Dni na pobranie",
+          "delete_sources": "Usuwaj z kart i dysku konsoli po wysyłce"
         },
         "data_description": {
           "guard_entity": "Włączona, gdy trwa ujęcie. Jej zmiany tworzą dziennik ujęć; wysyłka nigdy nie działa, gdy jest włączona.",
@@ -78,7 +79,8 @@
           "s3_access_key": "Puste pole zostawia zapisany klucz",
           "s3_secret_key": "Puste pole zostawia zapisany klucz",
           "s3_root": "Każda rezerwacja dostaje własny podkatalog z losowym składnikiem",
-          "download_days": "Po tym czasie pliki są kasowane z bucketu. Podpisane linki nie mogą żyć dłużej niż 7 dni."
+          "download_days": "Po tym czasie pliki są kasowane z bucketu. Podpisane linki nie mogą żyć dłużej niż 7 dni.",
+          "delete_sources": "Gdy każdy plik sesji jest w buckecie z właściwym rozmiarem, a link został zgłoszony, pliki tej sesji są usuwane z kart kamer i dysku konsoli. Tylko te pliki; nic nie jest formatowane."
         }
       }
     },
@@ -116,6 +118,11 @@
     "calendar": {
       "bookings": {
         "name": "Kalendarz"
+      }
+    },
+    "switch": {
+      "recording_opt_in": {
+        "name": "Zgoda na nagrania"
       }
     }
   },
@@ -188,7 +195,7 @@
         },
         "action": {
           "name": "Decyzja",
-          "description": "upload: zgoda w imieniu klienta i wysyłka najbliższej nocy; keep: zapytaj ponownie jutro; delete: jeszcze niedostępne."
+          "description": "upload: zgoda w imieniu klienta i wysyłka najbliższej nocy; keep: zapytaj ponownie jutro; delete: usuń pliki sesji z kart i dysku konsoli, gdy tylko nikogo nie będzie w studiu."
         }
       }
     },
