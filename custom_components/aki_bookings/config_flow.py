@@ -20,6 +20,7 @@ from .const import (
     DEFAULT_DOWNLOAD_DAYS,
     DEFAULT_DRY_RUN,
     DEFAULT_GUARD,
+    DEFAULT_PRESET_REFERENCE,
     DEFAULT_S3_ROOT,
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_SLOT_LIMIT,
@@ -30,6 +31,8 @@ from .const import (
     OPT_DRY_RUN,
     OPT_DRY_RUN_REPORT,
     OPT_GUARD,
+    OPT_PRESET_REFERENCE,
+    OPT_PRESETS_ENABLED,
     OPT_REC_ENABLED,
     OPT_S3_BUCKET,
     OPT_S3_ENDPOINT,
@@ -118,7 +121,7 @@ class AkiBookingsConfigFlow(ConfigFlow, domain=DOMAIN):
 
 class AkiBookingsOptionsFlow(OptionsFlow):
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        return self.async_show_menu(step_id="init", menu_options=["codes", "recordings"])
+        return self.async_show_menu(step_id="init", menu_options=["codes", "recordings", "presets"])
 
     def _save(self, user_input: dict[str, Any]) -> ConfigFlowResult:
         """Each step edits its own part; the other part of the options stays as it was."""
@@ -181,3 +184,27 @@ class AkiBookingsOptionsFlow(OptionsFlow):
             vol.Required(OPT_DELETE_SOURCES, default=options.get(OPT_DELETE_SOURCES, False)): selector.BooleanSelector(),
         })
         return self.async_show_form(step_id="recordings", data_schema=schema, errors=errors)
+
+    async def async_step_presets(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        options = self.config_entry.options
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            user_input[OPT_PRESET_REFERENCE] = user_input[OPT_PRESET_REFERENCE].strip()
+            if user_input[OPT_PRESETS_ENABLED]:
+                try:  # preset_status came with a74_bridge 0.8.0; without it a changed preset cannot be told from an untouched one
+                    if not self.hass.services.has_service("a74_bridge", "preset_status"):
+                        raise LookupError
+                    library = await self.hass.services.async_call("a74_bridge", "preset_list", {}, blocking=True, return_response=True)
+                except Exception:  # noqa: BLE001
+                    errors["base"] = "bridge_missing"
+                else:
+                    if user_input[OPT_PRESET_REFERENCE] not in {p["name"] for p in (library or {}).get("presets") or []}:
+                        errors[OPT_PRESET_REFERENCE] = "reference_missing"
+            if not errors:
+                return self._save(user_input)
+            options = {**options, **user_input}
+        schema = vol.Schema({
+            vol.Required(OPT_PRESETS_ENABLED, default=options.get(OPT_PRESETS_ENABLED, False)): selector.BooleanSelector(),
+            vol.Required(OPT_PRESET_REFERENCE, default=options.get(OPT_PRESET_REFERENCE, DEFAULT_PRESET_REFERENCE)): selector.TextSelector(),
+        })
+        return self.async_show_form(step_id="presets", data_schema=schema, errors=errors)

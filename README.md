@@ -74,6 +74,7 @@ One device, "Rezerwacje studia":
 | Problem (binary sensor) | on when something needs attention | `reasons` (`code_failed`, `auth_failed`, `sync_stale`), `failed_codes`, `sync_error`, `lock_error` |
 | Calendar | on during a session | one event per confirmed booking |
 | Recordings (sensor) | sessions that still need something | see [Recordings](#recordings) |
+| Client preset (sensor) | the preset put on the cameras for the client who is in, or `none` | `enabled`, `reference`, `ref`, `state` (`opening`, `open`, `failed`), `created`, `waiting`, `error`, `last` (how the previous client's preset was closed) |
 | Recording opt-in (switch) | the choice of the booking whose code window is open; unavailable otherwise | `id`, `ref`, `recording_status`. Made for the studio kiosk: turning it writes the choice to the booking system, which refuses once the upload has started |
 
 `code_status` is one of `none`, `scheduled`, `pending`, `applied`, `failed`, `revoked`, `removed`.
@@ -180,6 +181,32 @@ deletes a file only when name and size both match and lists the source again to 
 takes the camera out of remote control for a few seconds, so it waits for the same conditions as an
 upload. Up to three tries a day; what could not be removed is reported once a day and tried again
 the next day. Files that belong to no booking are never deleted. Nothing is ever formatted.
+
+## Camera presets
+
+Off by default; switch it on under Configure → Camera presets. Needs a74_bridge ≥ 0.8.0 (its `preset_status` action).
+
+Each client has a preset in the a74_bridge library, named after the booking's `entity_name`:
+"Studio XYZ sp. z o.o." → `klient-studio-xyz-sp-z-o-o`.
+
+- **When the booking's code window opens**, the preset is loaded on all cameras. A client without a
+  preset gets one: the reference preset (an option, `checklista-4k25-pp11` by default) is loaded and
+  saved under the client's name. A booking without an entity name gets the reference itself.
+  Cameras that already run the wanted preset untouched are not reloaded (a load reboots the camera).
+- **When the client is gone** (their code window closed, or the next client's session began), a fresh
+  drift check is run and the cameras whose settings changed are saved into the client's preset.
+  A camera that runs another preset by then was put there by hand and is not saved.
+- With back-to-back bookings the session in progress keeps the cameras; the next client's preset is
+  loaded when their session starts.
+- Nothing is loaded or saved while recording mode is on or while the cameras are uploading; the step
+  waits. The recording pipeline in turn waits for a pending save before it takes the cameras.
+- A step that fails three times is given up: event `aki_bookings_preset_failed` (`operation`:
+  `load` or `save`, `error`). A preset that was not loaded is never saved.
+
+Events: `aki_bookings_preset_loaded` (`ref`, `preset`, `created`, `reference`),
+`aki_bookings_preset_saved` (`ref`, `preset`, `cameras`, `skipped`), `aki_bookings_preset_failed`.
+
+Switching the option on while a client is in loads their preset at once, which reboots the cameras.
 
 ## Development
 

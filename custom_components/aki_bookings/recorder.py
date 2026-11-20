@@ -269,6 +269,9 @@ class RecordingManager:
 
     async def _next_step(self, now: datetime, bookings) -> None:
         guard = self.guard_on
+        presets = self.coordinator.presets
+        if presets and presets.pending(now):
+            return  # a client's settings are still to be saved or loaded: that needs the cameras in Remote mode
         if not await self._refresh_register(now):
             return
         cameras_ok = rec.camera_upload_allowed(bookings, now, guard, self._local_date)

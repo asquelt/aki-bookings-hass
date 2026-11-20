@@ -42,7 +42,8 @@
         "title": "Aki Bookings",
         "menu_options": {
           "codes": "Door codes",
-          "recordings": "Recordings"
+          "recordings": "Recordings",
+          "presets": "Camera presets"
         }
       },
       "codes": {
@@ -82,11 +83,24 @@
           "download_days": "After that the files are deleted from the bucket. Signed links cannot live longer than 7 days.",
           "delete_sources": "Once every file of a session is in the bucket with the right size and the link is reported, its files are removed from the camera cards and the console disk. Only those files; nothing is formatted."
         }
+      },
+      "presets": {
+        "title": "Camera presets",
+        "description": "When a booking's code window opens, the cameras get the client's preset (named after the booking's entity, e.g. klient-studio-xyz). When the client leaves, changed settings are saved back to it. A client without a preset gets a copy of the reference preset. Needs a74_bridge 0.8.0 or newer. Nothing is loaded or saved while recording mode is on.",
+        "data": {
+          "presets_enabled": "Client presets",
+          "preset_reference": "Reference preset"
+        },
+        "data_description": {
+          "preset_reference": "A name from the a74_bridge preset library. Also loaded for bookings without an entity name."
+        }
       }
     },
     "error": {
       "storage_incomplete": "Fill in the endpoint, the bucket and both keys before switching the pipeline on",
-      "storage_refused": "The storage refused the keys or cannot be reached"
+      "storage_refused": "The storage refused the keys or cannot be reached",
+      "bridge_missing": "a74_bridge 0.8.0 or newer is not set up (its preset_status action is missing)",
+      "reference_missing": "No such preset in the a74_bridge library"
     }
   },
   "entity": {
@@ -105,6 +119,9 @@
       },
       "recordings": {
         "name": "Recordings"
+      },
+      "client_preset": {
+        "name": "Client preset"
       }
     },
     "binary_sensor": {

@@ -7,7 +7,7 @@ from homeassistant.components.logbook import LOGBOOK_ENTRY_MESSAGE, LOGBOOK_ENTR
 from homeassistant.core import Event, HomeAssistant, callback
 
 from .const import (
-    DOMAIN, EVENT_CODE_APPLIED, EVENT_CODE_FAILED, EVENT_CODE_REMOVED, EVENT_REC_DELETED, EVENT_REC_EMPTY, EVENT_REC_FAILED,
+    DOMAIN, EVENT_CODE_APPLIED, EVENT_CODE_FAILED, EVENT_CODE_REMOVED, EVENT_PRESET_FAILED, EVENT_PRESET_LOADED, EVENT_PRESET_SAVED, EVENT_REC_DELETED, EVENT_REC_EMPTY, EVENT_REC_FAILED,
     EVENT_REC_LEFT, EVENT_REC_NONE, EVENT_REC_READY, EVENT_REC_UNASSIGNED, EVENT_SRC_DELETED, EVENT_SRC_FAILED, EVENT_SYNC_FAILED,
 )
 
@@ -20,6 +20,9 @@ REC = {
     EVENT_REC_UNASSIGNED: "files outside any booking are on the cards or the console disk",
     EVENT_REC_DELETED: "recordings of booking {ref} deleted from the cloud ({objects} objects)",
     EVENT_SRC_DELETED: "recordings of booking {ref} removed from the cards and the console disk ({files} files)",
+    EVENT_PRESET_LOADED: "camera preset {preset} loaded for booking {ref}",
+    EVENT_PRESET_SAVED: "camera preset {preset} saved after booking {ref}",
+    EVENT_PRESET_FAILED: "camera preset {preset}: {operation} failed for booking {ref}: {error}",
     EVENT_SRC_FAILED: "{left} file(s) of booking {ref} could not be removed from the cards or the console disk",
 }
 
@@ -36,7 +39,7 @@ def async_describe_events(hass: HomeAssistant, async_describe_event: Callable[[s
         elif event.event_type == EVENT_CODE_FAILED:
             message = f"lock {data.get('operation')} failed for booking {data.get('ref')}: {data.get('error')}{dry}"
         elif event.event_type in REC:
-            message = REC[event.event_type].format_map({"ref": "?", "files": "?", "error": "?", "objects": "?", "left": "?", **data})
+            message = REC[event.event_type].format_map({"ref": "?", "files": "?", "error": "?", "objects": "?", "left": "?", "preset": "?", "operation": "?", **data})
         else:
             message = f"booking feed failed ({data.get('consecutive_failures')} in a row): {data.get('error')}"
         return {LOGBOOK_ENTRY_NAME: "Aki Bookings", LOGBOOK_ENTRY_MESSAGE: message}

@@ -42,7 +42,8 @@
         "title": "Aki Bookings",
         "menu_options": {
           "codes": "Kody do drzwi",
-          "recordings": "Nagrania"
+          "recordings": "Nagrania",
+          "presets": "Presety kamer"
         }
       },
       "codes": {
@@ -82,11 +83,24 @@
           "download_days": "Po tym czasie pliki są kasowane z bucketu. Podpisane linki nie mogą żyć dłużej niż 7 dni.",
           "delete_sources": "Gdy każdy plik sesji jest w buckecie z właściwym rozmiarem, a link został zgłoszony, pliki tej sesji są usuwane z kart kamer i dysku konsoli. Tylko te pliki; nic nie jest formatowane."
         }
+      },
+      "presets": {
+        "title": "Presety kamer",
+        "description": "Gdy otwiera się okno kodu rezerwacji, kamery dostają preset klienta (nazwany od podmiotu z rezerwacji, np. klient-studio-xyz). Gdy klient wychodzi, zmienione ustawienia są do niego zapisywane. Klient bez presetu dostaje kopię presetu referencyjnego. Wymaga a74_bridge 0.8.0 lub nowszego. Nic nie jest wczytywane ani zapisywane, gdy włączony jest tryb nagrywania.",
+        "data": {
+          "presets_enabled": "Presety klientów",
+          "preset_reference": "Preset referencyjny"
+        },
+        "data_description": {
+          "preset_reference": "Nazwa z biblioteki presetów a74_bridge. Wczytywany też dla rezerwacji bez nazwy podmiotu."
+        }
       }
     },
     "error": {
       "storage_incomplete": "Uzupełnij adres, bucket i oba klucze, zanim włączysz obsługę nagrań",
-      "storage_refused": "Magazyn odrzucił klucze albo jest nieosiągalny"
+      "storage_refused": "Magazyn odrzucił klucze albo jest nieosiągalny",
+      "bridge_missing": "Brak a74_bridge 0.8.0 lub nowszego (nie ma akcji preset_status)",
+      "reference_missing": "Nie ma takiego presetu w bibliotece a74_bridge"
     }
   },
   "entity": {
@@ -105,6 +119,9 @@
       },
       "recordings": {
         "name": "Nagrania"
+      },
+      "client_preset": {
+        "name": "Preset klienta"
       }
     },
     "binary_sensor": {

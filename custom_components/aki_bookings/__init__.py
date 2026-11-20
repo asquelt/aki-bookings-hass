@@ -25,6 +25,7 @@ from .const import (
     SERVICE_SYNC_NOW,
 )
 from .coordinator import BookingCoordinator
+from .presets import PresetManager
 from .recorder import RecordingManager
 
 PLATFORMS = [Platform.BINARY_SENSOR, Platform.CALENDAR, Platform.SENSOR, Platform.SWITCH]
@@ -123,6 +124,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: AkiConfigEntry) -> bool:
     coordinator.recordings = RecordingManager(hass, entry, coordinator)
     await coordinator.recordings.async_start()
     entry.async_on_unload(coordinator.recordings.async_stop)
+    coordinator.presets = PresetManager(hass, entry, coordinator)
+    await coordinator.presets.async_start()
+    entry.async_on_unload(coordinator.presets.async_stop)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
@@ -141,3 +145,4 @@ async def async_remove_entry(hass: HomeAssistant, entry: AkiConfigEntry) -> None
 
     await Store(hass, 1, f"{DOMAIN}.{entry.entry_id}").async_remove()
     await Store(hass, 1, f"{DOMAIN}.{entry.entry_id}.recordings").async_remove()
+    await Store(hass, 1, f"{DOMAIN}.{entry.entry_id}.presets").async_remove()

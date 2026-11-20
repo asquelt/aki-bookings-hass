@@ -4,6 +4,8 @@ No Home Assistant imports here, so the rules can be tested with plain pytest.
 """
 from __future__ import annotations
 
+import re
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -137,6 +139,32 @@ def current_booking(bookings: list[Booking], now: datetime) -> Booking | None:
 
 def upcoming_booking(bookings: list[Booking], now: datetime) -> Booking | None:
     return next((b for b in bookings if b.confirmed and b.start > now), None)
+
+
+# ---- camera presets ---------------------------------------------------------------------------
+
+PRESET_PREFIX = "klient-"
+
+
+def preset_name(entity_name: str | None) -> str | None:
+    """The client's preset in the camera library: 'Studio XYZ sp. z o.o.' → 'klient-studio-xyz-sp-z-o-o'."""
+    text = unicodedata.normalize("NFKD", (entity_name or "").replace("ł", "l").replace("Ł", "L"))
+    slug = re.sub(r"[^a-z0-9]+", "-", text.encode("ascii", "ignore").decode().lower()).strip("-")[:48].strip("-")
+    return f"{PRESET_PREFIX}{slug}" if slug else None
+
+
+def preset_booking(bookings: list[Booking], now: datetime) -> Booking | None:
+    """Whose settings belong on the cameras now: the session in progress, else the client about to
+    start (their code already opens the door), else the one who has just finished and is packing."""
+    live = [b for b in bookings if b.confirmed]
+    for b in live:
+        if b.start <= now < b.end:
+            return b
+    inside = [b for b in live if (b.valid_from or b.start) <= now < (b.valid_to or b.end)]
+    coming = [b for b in inside if now < b.start]
+    if coming:
+        return min(coming, key=lambda b: b.start)
+    return max(inside, key=lambda b: b.end) if inside else None
 
 
 # ---- lock users -------------------------------------------------------------------------------

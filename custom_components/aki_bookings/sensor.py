@@ -24,6 +24,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AkiConfigEntry, async_ad
         ActiveCodesSensor(coordinator),
         LastSyncSensor(coordinator),
         RecordingsSensor(coordinator),
+        ClientPresetSensor(coordinator),
     ])
 
 
@@ -140,4 +141,34 @@ class RecordingsSensor(AkiEntity, SensorEntity):
             "open_take": bool(manager.journal and manager.journal[-1].get("stop") is None),
             "takes": manager.takes_view(),
             "last_error": manager.last_error,
+        }
+
+
+class ClientPresetSensor(AkiEntity, SensorEntity):
+    """The preset put on the cameras for the client who is in, or `none`."""
+
+    def __init__(self, coordinator: BookingCoordinator) -> None:
+        super().__init__(coordinator, "client_preset")
+
+    @property
+    def native_value(self) -> str:
+        manager = self.coordinator.presets
+        current = manager.current if manager else None
+        return (current["preset"] or manager.reference) if current else "none"
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        manager = self.coordinator.presets
+        if manager is None:
+            return {}
+        current = manager.current or {}
+        return {
+            "enabled": manager.enabled,
+            "reference": manager.reference,
+            "ref": current.get("ref"),
+            "state": current.get("state"),
+            "created": current.get("created"),
+            "waiting": current.get("waiting"),
+            "error": current.get("error"),
+            "last": manager.last,
         }

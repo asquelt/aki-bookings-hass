@@ -21,6 +21,8 @@ OPT_S3_KEY = "s3_access_key"
 OPT_S3_SECRET = "s3_secret_key"
 OPT_S3_ROOT = "s3_root"
 OPT_DOWNLOAD_DAYS = "download_days"
+OPT_PRESETS_ENABLED = "presets_enabled"
+OPT_PRESET_REFERENCE = "preset_reference"  # a new client's preset starts as a copy of this one
 OPT_DELETE_SOURCES = "delete_sources"  # after a verified upload, remove the files from the cards and the console disk
 
 DEFAULT_URL = "https://pero.ro"
@@ -29,6 +31,7 @@ DEFAULT_SLOT_LIMIT = 8  # of the lock's 10 Matter users; the rest stay free for 
 DEFAULT_GUARD = "input_boolean.tryb_nagrywania"  # on = a take is being recorded; uploads must stay away
 DEFAULT_S3_ROOT = "nagrania"
 DEFAULT_DOWNLOAD_DAYS = 7  # also the longest a signed link can live
+DEFAULT_PRESET_REFERENCE = "checklista-4k25-pp11"
 DEFAULT_DRY_RUN = True  # a fresh install touches neither the lock nor the booking system
 
 WINDOW_BACK_H = 3  # the feed filters by session overlap; valid_to can trail the session by up to 2 h
@@ -52,6 +55,9 @@ EVENT_REC_UNASSIGNED = f"{DOMAIN}_recordings_unassigned"
 EVENT_REC_DELETED = f"{DOMAIN}_recordings_deleted"
 EVENT_SRC_DELETED = f"{DOMAIN}_recordings_sources_deleted"
 EVENT_SRC_FAILED = f"{DOMAIN}_recordings_sources_failed"
+EVENT_PRESET_LOADED = f"{DOMAIN}_preset_loaded"
+EVENT_PRESET_SAVED = f"{DOMAIN}_preset_saved"
+EVENT_PRESET_FAILED = f"{DOMAIN}_preset_failed"
 
 SERVICE_SYNC_NOW = "sync_now"
 SERVICE_RECONCILE_LOCK = "reconcile_lock"
